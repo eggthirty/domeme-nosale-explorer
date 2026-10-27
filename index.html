@@ -80,7 +80,8 @@ input[type="number"] { width: 110px; font-variant-numeric: tabular-nums; }
 .btn { font: inherit; font-size: 14px; font-weight: 600; border-radius: 6px; padding: 7px 14px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
 .btn:hover { background: var(--hover); }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.daynav { display: flex; align-items: center; gap: 6px; }
+.daynav { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.btn.refresh { border-color: var(--accent); color: var(--accent); }
 .daynav .date { font-family: var(--font-mono); font-size: 15px; padding: 0 6px; font-variant-numeric: tabular-nums; }
 .note { font-size: 13px; color: var(--muted); margin: 0; }
 .spacer { flex: 1; }
@@ -209,6 +210,8 @@ body { margin: 0; }
         <span class="date" id="dayLabel">—</span>
         <button class="btn" id="nextDay" aria-label="다음날 추천">▶</button>
         <button class="btn" id="todayBtn">오늘</button>
+        <button class="btn refresh" id="refreshBtn" type="button" title="지금까지 보여 준 상품을 빼고 새로 추천합니다">↻ 새로고침</button>
+        <button class="btn" id="firstRound" type="button" hidden>처음 추천</button>
       </div>
       <label>추천 개수 <select id="tCount"><option>10</option><option>20</option><option>50</option><option selected>100</option><option>200</option></select>개</label>
       <label>가격 <input type="number" id="tMin" placeholder="최소" min="0" step="1000"> ~ <input type="number" id="tMax" placeholder="최대" min="0" step="1000"> 원</label>
@@ -354,7 +357,7 @@ body { margin: 0; }
   const EPOCH = Date.UTC(2000, 0, 1);
   const $ = (id) => document.getElementById(id);
   let DATA = null, SUP = [], ITEMS = [], supCount = [];
-  const state = { tab: 'today', dayOffset: 0, sup: -1, page: 0 };
+  const state = { tab: 'today', dayOffset: 0, sup: -1, page: 0, round: 0 };
 
   const store = {
     get(k) { try { return JSON.parse(localStorage.getItem('nsx:' + k)); } catch (e) { return null; } },
@@ -415,18 +418,29 @@ body { margin: 0; }
       pool.push([hash(key, it[2]), i]);
     }
     pool.sort((a, b) => a[0] - b[0]);
-    const per = new Map(); todayPicked = [];
-    for (const [, i] of pool) {
-      const s = ITEMS[i][0], c = per.get(s) || 0;
-      if (c >= cap) continue;
-      per.set(s, c + 1); todayPicked.push(ITEMS[i]);
-      if (todayPicked.length >= want) break;
+    // 새로고침할 때마다 앞 회차에서 보여 준 상품을 빼고 같은 순서에서 다음 상품을 고른다
+    const shown = new Set();
+    let per = new Map(), picked = [];
+    for (let r = 0; r <= state.round; r++) {
+      per = new Map(); picked = [];
+      for (const [, i] of pool) {
+        if (shown.has(i)) continue;
+        const s = ITEMS[i][0], c = per.get(s) || 0;
+        if (c >= cap) continue;
+        per.set(s, c + 1); picked.push(i);
+        if (picked.length >= want) break;
+      }
+      picked.forEach((i) => shown.add(i));
     }
+    todayPicked = picked.map((i) => ITEMS[i]);
+    $('firstRound').hidden = state.round === 0;
     $('copyToday').textContent = `상품번호 ${todayPicked.length}개 복사`;
     $('todayList').innerHTML = todayPicked.length
       ? headHtml + todayPicked.map(rowHtml).join('')
-      : `<div class="empty">조건에 맞는 상품이 없습니다. 가격 범위를 넓히거나 '등록'을 전체로 바꿔 보세요.</div>`;
-    $('todayNote').textContent = `${key} 추천 · 조건에 맞는 상품 ${pool.length.toLocaleString('ko-KR')}개 중 ${todayPicked.length}개, 공급사 ${per.size}곳. 같은 날짜·같은 조건이면 누가 열어도 같은 목록이 나옵니다.`;
+      : state.round > 0
+        ? `<div class="empty">이 조건으로 추천할 상품을 모두 보여 드렸습니다. [처음 추천]으로 돌아가거나 조건을 바꿔 보세요.</div>`
+        : `<div class="empty">조건에 맞는 상품이 없습니다. 가격 범위를 넓히거나 '등록'을 전체로 바꿔 보세요.</div>`;
+    $('todayNote').textContent = `${key} ${state.round + 1}번째 추천 · 조건에 맞는 상품 ${pool.length.toLocaleString('ko-KR')}개 중 ${todayPicked.length}개, 공급사 ${per.size}곳. 같은 날짜·같은 조건이면 누가 열어도 같은 목록이 나옵니다.`;
   }
 
   function renderSupList() {
@@ -534,9 +548,12 @@ body { margin: 0; }
 
   function wire() {
     for (const b of document.querySelectorAll('nav.tabs button')) b.addEventListener('click', () => setTab(b.dataset.tab));
-    $('prevDay').addEventListener('click', () => { state.dayOffset--; renderToday(); });
-    $('nextDay').addEventListener('click', () => { if (state.dayOffset < 0) { state.dayOffset++; renderToday(); } });
-    $('todayBtn').addEventListener('click', () => { state.dayOffset = 0; renderToday(); });
+    const setRound = (r) => { state.round = r; store.set('round', { day: dayKey(), r }); renderToday(); };
+    $('prevDay').addEventListener('click', () => { state.dayOffset--; setRound(0); });
+    $('nextDay').addEventListener('click', () => { if (state.dayOffset < 0) { state.dayOffset++; setRound(0); } });
+    $('todayBtn').addEventListener('click', () => { state.dayOffset = 0; setRound(0); });
+    $('refreshBtn').addEventListener('click', () => { setRound(state.round + 1); toast(`${state.round + 1}번째 추천입니다. 앞에서 보여 준 상품은 빠졌습니다`); });
+    $('firstRound').addEventListener('click', () => setRound(0));
     const rt = debounce(() => { store.set('today', { mn: $('tMin').value, mx: $('tMax').value, cap: $('tCap').value, reg: $('tReg').value, count: $('tCount').value }); renderToday(); }, 250);
     for (const id of ['tMin', 'tMax', 'tCap', 'tReg', 'tCount']) { $(id).addEventListener('input', rt); $(id).addEventListener('change', rt); }
     $('copyToday').addEventListener('click', () => copy(todayPicked));
@@ -558,6 +575,7 @@ body { margin: 0; }
     const sizes = ['10', '20', '50', '100', '200'];
     if (t) { $('tMin').value = t.mn || ''; $('tMax').value = t.mx || ''; if (t.cap) $('tCap').value = t.cap; if (['0', '30', '90', '365'].includes(t.reg)) $('tReg').value = t.reg; else if (t.recent) $('tReg').value = '365'; if (sizes.includes(t.count)) $('tCount').value = t.count; }
     const sz = store.get('size'); if (sizes.includes(sz)) { $('sSize').value = sz; PAGE = Number(sz); }
+    const rd = store.get('round'); if (rd && rd.day === dayKey() && rd.r > 0) state.round = rd.r;
     const tab = store.get('tab'); if (tab === 'supplier' || tab === 'today') setTab(tab);
     const m = store.get('month'); if (m && [...$('month').options].some((o) => o.value === m)) $('month').value = m;
   }
