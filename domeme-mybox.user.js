@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         도매매 마이박스 자동 담기 (판매이력 없는 상품 탐색기)
 // @namespace    https://eggthirty.github.io/domeme-nosale-explorer/
-// @version      1.0.0
+// @version      1.1.0
 // @description  탐색기에서 [도매매에 담기]를 누르면 상품번호 검색, 해시태그 입력, 마이박스담기까지 자동으로 진행합니다.
 // @match        https://domemedb.domeggook.com/index/item/itemDBSearch.php*
 // @run-at       document-idle
@@ -72,7 +72,7 @@
     setTimeout(function () {
       var picked = selectedCount();
       say('보낸 ' + job.n + '개 중 ' + boxes.length + '개가 검색되어 ' + (picked == null ? boxes.length : picked) + '개를 마이박스에 담습니다' + (job.tag ? ' (' + job.tag + ')' : '') + '.' +
-        (job.n > boxes.length ? '<br>빠진 상품은 품절·판매종료이거나 수량별비례·구간별배송료 상품이라 제외된 것입니다.' : ''), true);
+        (job.n > boxes.length ? '<br>빠진 상품은 품절되었거나 판매가 끝난 상품일 수 있습니다.' : ''), true);
       if (window.__nsxDryRun) return;
       mb.click();
     }, 400);
@@ -92,8 +92,9 @@
     ta.value = job.nos.join('\n'); fire(ta, 'input');
     var add = btn('추가', 'n_button2');
     if (add) add.click();
-    setChecked($('pp1'), true);
-    setChecked($('pp2'), true);
+    // 수량별비례상품 제외 · 구간별배송료추가상품 제외는 체크 해제한 채로 검색한다
+    setChecked($('pp1'), false);
+    setChecked($('pp2'), false);
     // 결과를 한 화면에 모두 보이게 (도매매는 최대 200개씩 보기)
     var form = $('search').form;
     var limit = form && form.querySelector('input[name=pageLimit]');
