@@ -213,7 +213,7 @@ body { margin: 0; }
       <label>추천 개수 <select id="tCount"><option>10</option><option>20</option><option>50</option><option selected>100</option><option>200</option></select>개</label>
       <label>가격 <input type="number" id="tMin" placeholder="최소" min="0" step="1000"> ~ <input type="number" id="tMax" placeholder="최대" min="0" step="1000"> 원</label>
       <label>공급사당 최대 <select id="tCap"><option>1</option><option>2</option><option selected>3</option><option>5</option><option>10</option></select>개</label>
-      <label><input type="checkbox" id="tRecent"> 최근 1년 등록 상품만</label>
+      <label>등록 <select id="tReg"><option value="0">전체</option><option value="30">신규 (최근 30일)</option><option value="90">신규 (최근 90일)</option><option value="365">최근 1년</option></select></label>
       <span class="spacer"></span>
       <button class="btn" id="copyToday">상품번호 복사</button>
       <a class="btn primary" id="sendToday" href="https://domemedb.domeggook.com/index/item/itemDBSearch.php?fromOversea=2" target="_blank" rel="noopener">도매매에 담기</a>
@@ -371,6 +371,8 @@ body { margin: 0; }
   }
   function dayKey() { return new Date(kstToday() + state.dayOffset * 864e5).toISOString().slice(0, 10); }
   function todayDays() { return Math.floor((kstToday() - EPOCH) / 864e5); }
+  // '신규'는 그 달 리스트의 추출일 기준으로 센다
+  function asOfDays() { return DATA && DATA.asOf ? Math.floor((Date.parse(DATA.asOf + 'T00:00:00Z') - EPOCH) / 864e5) : todayDays(); }
 
   // 날짜 문자열 + 상품번호로 정해지는 해시: 같은 날 같은 조건이면 같은 결과
   function hash(str, n) {
@@ -382,7 +384,7 @@ body { margin: 0; }
 
   function rowHtml(it, i) {
     const [s, title, no, price, reg, tier] = it;
-    const isNew = reg >= 0 && todayDays() - reg <= 90;
+    const isNew = reg >= 0 && asOfDays() - reg <= 90;
     const tierNote = tier ? `<small>수량별 단가</small>` : '';
     return `<div class="row">
       <span class="n">${i + 1}</span>
@@ -403,13 +405,13 @@ body { margin: 0; }
     const key = dayKey();
     $('dayLabel').textContent = key;
     $('nextDay').disabled = state.dayOffset >= 0;
-    const mn = num('tMin'), mx = num('tMax'), cap = Number($('tCap').value), recent = $('tRecent').checked, want = Number($('tCount').value);
-    const minReg = todayDays() - 365;
+    const mn = num('tMin'), mx = num('tMax'), cap = Number($('tCap').value), regDays = Number($('tReg').value), want = Number($('tCount').value);
+    const minReg = asOfDays() - regDays;
     const pool = [];
     for (let i = 0; i < ITEMS.length; i++) {
       const it = ITEMS[i];
       if (!priceOk(it[3], mn, mx)) continue;
-      if (recent && it[4] < minReg) continue;
+      if (regDays && (it[4] < 0 || it[4] < minReg)) continue;
       pool.push([hash(key, it[2]), i]);
     }
     pool.sort((a, b) => a[0] - b[0]);
@@ -423,7 +425,7 @@ body { margin: 0; }
     $('copyToday').textContent = `상품번호 ${todayPicked.length}개 복사`;
     $('todayList').innerHTML = todayPicked.length
       ? headHtml + todayPicked.map(rowHtml).join('')
-      : `<div class="empty">조건에 맞는 상품이 없습니다. 가격 범위를 넓히거나 '최근 1년 등록' 체크를 해제해 보세요.</div>`;
+      : `<div class="empty">조건에 맞는 상품이 없습니다. 가격 범위를 넓히거나 '등록'을 전체로 바꿔 보세요.</div>`;
     $('todayNote').textContent = `${key} 추천 · 조건에 맞는 상품 ${pool.length.toLocaleString('ko-KR')}개 중 ${todayPicked.length}개, 공급사 ${per.size}곳. 같은 날짜·같은 조건이면 누가 열어도 같은 목록이 나옵니다.`;
   }
 
@@ -535,8 +537,8 @@ body { margin: 0; }
     $('prevDay').addEventListener('click', () => { state.dayOffset--; renderToday(); });
     $('nextDay').addEventListener('click', () => { if (state.dayOffset < 0) { state.dayOffset++; renderToday(); } });
     $('todayBtn').addEventListener('click', () => { state.dayOffset = 0; renderToday(); });
-    const rt = debounce(() => { store.set('today', { mn: $('tMin').value, mx: $('tMax').value, cap: $('tCap').value, recent: $('tRecent').checked, count: $('tCount').value }); renderToday(); }, 250);
-    for (const id of ['tMin', 'tMax', 'tCap', 'tRecent', 'tCount']) { $(id).addEventListener('input', rt); $(id).addEventListener('change', rt); }
+    const rt = debounce(() => { store.set('today', { mn: $('tMin').value, mx: $('tMax').value, cap: $('tCap').value, reg: $('tReg').value, count: $('tCount').value }); renderToday(); }, 250);
+    for (const id of ['tMin', 'tMax', 'tCap', 'tReg', 'tCount']) { $(id).addEventListener('input', rt); $(id).addEventListener('change', rt); }
     $('copyToday').addEventListener('click', () => copy(todayPicked));
     $('copySup').addEventListener('click', () => copy(supRows.slice(state.page * PAGE, state.page * PAGE + PAGE)));
     $('supFilter').addEventListener('input', renderSupList);
@@ -554,7 +556,7 @@ body { margin: 0; }
   function restore() {
     const t = store.get('today');
     const sizes = ['10', '20', '50', '100', '200'];
-    if (t) { $('tMin').value = t.mn || ''; $('tMax').value = t.mx || ''; if (t.cap) $('tCap').value = t.cap; $('tRecent').checked = !!t.recent; if (sizes.includes(t.count)) $('tCount').value = t.count; }
+    if (t) { $('tMin').value = t.mn || ''; $('tMax').value = t.mx || ''; if (t.cap) $('tCap').value = t.cap; if (['0', '30', '90', '365'].includes(t.reg)) $('tReg').value = t.reg; else if (t.recent) $('tReg').value = '365'; if (sizes.includes(t.count)) $('tCount').value = t.count; }
     const sz = store.get('size'); if (sizes.includes(sz)) { $('sSize').value = sz; PAGE = Number(sz); }
     const tab = store.get('tab'); if (tab === 'supplier' || tab === 'today') setTab(tab);
     const m = store.get('month'); if (m && [...$('month').options].some((o) => o.value === m)) $('month').value = m;
