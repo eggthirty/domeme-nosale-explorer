@@ -59,6 +59,10 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .mybox summary { cursor: pointer; padding: 10px 14px; font-weight: 600; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
 .mybox summary .hint { font-weight: 400; font-size: 13px; color: var(--muted); }
 .mybox-body { padding: 0 14px 14px; display: grid; gap: 10px; }
+.mb-h { margin: 4px 0 0; font-size: 15px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.mb-h .hint { font-weight: 400; font-size: 13px; color: var(--muted); }
+.steps code { font-family: var(--font-mono); font-size: 13px; background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+.steps a:not(.bm) { color: var(--accent); }
 .steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 14px; max-width: 72ch; }
 .bm { display: inline-block; padding: 3px 12px; border-radius: 999px; background: var(--tag); color: var(--tag-ink); font-weight: 600; text-decoration: none; cursor: grab; border: 1px dashed var(--tag-ink); }
 kbd { font-family: var(--font-mono); font-size: 12px; padding: 1px 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); }
@@ -169,14 +173,19 @@ body { margin: 0; }
   </header>
 
   <details class="mybox" id="myboxPanel">
-    <summary>도매매 마이박스에 담기 <span class="hint">처음이면 펼쳐서 북마크 버튼을 먼저 설치하세요</span></summary>
+    <summary>도매매 마이박스에 담기 <span class="hint">처음이면 펼쳐서 자동 담기를 먼저 설치하세요</span></summary>
     <div class="mybox-body">
+      <h3 class="mb-h">자동 담기 (추천) <span class="hint">[도매매에 담기] 한 번이면 끝</span></h3>
       <ol class="steps">
-        <li><b>처음 한 번:</b> 아래 <a class="bm" id="bmLink" href="#">마이박스 담기</a> 버튼을 브라우저 즐겨찾기 막대로 끌어다 놓습니다. 막대가 안 보이면 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>.</li>
-        <li>도매매에 로그인합니다.</li>
-        <li>여기서 상품을 고르고 <b>[도매매에 담기]</b>를 누릅니다. 해시태그와 상품번호가 복사되고 도매매 상품검색이 열립니다.</li>
-        <li>열린 도매매 화면에서 즐겨찾기의 <b>마이박스 담기</b>를 누릅니다. 처음 한 번은 Chrome이 <b>클립보드 읽기를 허용할지</b> 묻습니다. <b>허용</b>을 누르면 다음부터는 바로 진행됩니다. 차단하면 붙여넣기 창이 뜨니 <kbd>Ctrl</kbd>+<kbd>V</kbd> 후 확인을 누르세요.</li>
-        <li>번호 추가 → 수량별비례·구간별배송료 상품 제외 → 검색 → 전체선택 → 해시태그 → 마이박스담기까지 자동으로 진행됩니다. 검색 뒤 화면이 새로 열리면 <b>마이박스 담기</b>를 한 번 더 누릅니다.</li>
+        <li><a href="https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo" target="_blank" rel="noopener">Tampermonkey</a>를 Chrome에 추가합니다.</li>
+        <li>주소창에 <code>chrome://extensions</code>를 입력해 확장 프로그램 화면을 열고, Tampermonkey의 <b>[세부정보]</b>에서 <b>'사용자 스크립트 허용'</b>을 켭니다. 이 항목이 없으면 오른쪽 위 <b>'개발자 모드'</b>를 켭니다.</li>
+        <li><a class="bm" href="https://eggthirty.github.io/domeme-nosale-explorer/domeme-mybox.user.js" target="_blank" rel="noopener">자동 담기 설치</a>를 누르고, 열린 Tampermonkey 화면에서 <b>[설치]</b>를 누릅니다.</li>
+        <li>도매매에 로그인한 뒤, 여기서 상품을 고르고 <b>[도매매에 담기]</b>를 누릅니다. 열린 도매매 화면에서 번호 추가 → 수량별비례·구간별배송료 상품 제외 → 검색 → 전체선택 → 해시태그 → 마이박스담기가 저절로 진행되고, 왼쪽 아래에 진행 상황이 뜹니다.</li>
+      </ol>
+      <h3 class="mb-h">북마크로 담기 <span class="hint">확장 프로그램을 설치할 수 없을 때</span></h3>
+      <ol class="steps">
+        <li><b>처음 한 번:</b> <a class="bm" id="bmLink" href="#">마이박스 담기</a> 버튼을 즐겨찾기 막대로 끌어다 놓습니다. 막대가 안 보이면 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>.</li>
+        <li>[도매매에 담기]를 누른 뒤, 열린 도매매 화면에서 즐겨찾기의 <b>마이박스 담기</b>를 누릅니다. 처음 한 번은 <b>클립보드 읽기 허용</b>을 묻습니다. 검색 뒤 화면이 새로 열리면 한 번 더 누릅니다.</li>
       </ol>
       <div class="bar">
         <label for="hashTag">해시태그</label>
@@ -184,7 +193,7 @@ body { margin: 0; }
         <button class="btn" id="tagNext" type="button">다음 묶음 번호</button>
         <button class="btn" id="copyBm" type="button">북마크 코드 복사</button>
       </div>
-      <p class="note">이미 북마크를 설치했다면 지우고 새로 끌어다 놓아야 클립보드 읽기가 적용됩니다. 끌어다 놓기가 안 되면 [북마크 코드 복사]를 누르고, 즐겨찾기 추가 화면의 URL 칸에 붙여넣으세요. 도매매는 한 번에 2만 개까지 담을 수 있습니다.</p>
+      <p class="note">해시태그는 위 칸의 값이 그대로 들어갑니다. 북마크 끌어다 놓기가 안 되면 [북마크 코드 복사]를 누르고, 즐겨찾기 추가 화면의 URL 칸에 붙여넣으세요. 도매매는 한 번에 2만 개까지 담을 수 있습니다.</p>
     </div>
   </details>
 
@@ -251,17 +260,8 @@ body { margin: 0; }
   }
   function fire(el, type) { el.dispatchEvent(new Event(type, { bubbles: true })); }
   function setChecked(el, on) { if (el && el.checked !== on) el.click(); }
-  function resultBoxes() {
-    var head = [].slice.call(document.querySelectorAll('th, td')).filter(function (c) { return /상품이미지/.test(c.innerText || ''); })[0];
-    var table = head && head.closest('table');
-    return table ? [].slice.call(table.querySelectorAll('tbody input[type=checkbox]')) : [];
-  }
-  function selectAllBox() {
-    return [].slice.call(document.querySelectorAll('input[type=checkbox]')).filter(function (e) {
-      var t = (e.closest('label') || e.parentElement || {}).innerText || '';
-      return /전체선택/.test(t);
-    })[0];
-  }
+  // 검색 결과의 상품 줄 체크박스 (누르면 도매매가 '선택상품수'를 센다)
+  function resultBoxes() { return [].slice.call(document.querySelectorAll('input[name="item[]"]')); }
 
   if (!/domemedb\.domeggook\.com/.test(location.hostname) || !document.getElementById('search')) {
     if (confirm('도매매 상품검색 화면에서 눌러 주세요.\n지금 상품검색 화면으로 이동할까요?')) location.href = SEARCH_URL;
@@ -275,17 +275,26 @@ body { margin: 0; }
   function finish(tag) {
     var boxes = resultBoxes();
     if (!boxes.length) { alert('검색된 상품이 없습니다. 품절되었거나 판매가 끝난 상품일 수 있습니다.'); sessionStorage.removeItem(KEY); return; }
-    var all = selectAllBox();
-    if (all) setChecked(all, true); else boxes.forEach(function (b) { setChecked(b, true); });
+    boxes.forEach(function (b) { setChecked(b, true); });
     var tagInput = document.getElementById('keywordTags');
     if (tagInput && tag) { tagInput.value = tag; fire(tagInput, 'input'); fire(tagInput, 'change'); }
     sessionStorage.removeItem(KEY);
     var mb = btn('마이박스담기');
     if (!mb) { alert('마이박스담기 버튼을 찾지 못했습니다.'); return; }
-    mb.click();
+    setTimeout(function () { mb.click(); }, 400);
   }
 
   if (pending && resultBoxes().length) { finish(pending.tag); return; }
+
+  // 탐색기의 [도매매에 담기]로 열었다면 주소 # 뒤에 해시태그와 상품번호가 있다
+  var hm = location.hash.match(/nsx=([^&]+)/);
+  if (hm) {
+    history.replaceState(null, '', location.pathname + location.search);
+    try {
+      var hp = JSON.parse(decodeURIComponent(hm[1]));
+      if (hp.n && hp.n.length) { start((hp.t || '') + '\n' + hp.n.join('\n')); return; }
+    } catch (e) {}
+  }
 
   // 1단계: 클립보드에서 해시태그 + 상품번호를 읽는다 (처음 한 번 Chrome이 허용 여부를 묻는다)
   function askPaste(prefill) {
@@ -317,6 +326,8 @@ body { margin: 0; }
   if (add) add.click();
   setChecked(document.getElementById('pp1'), true);
   setChecked(document.getElementById('pp2'), true);
+  var limit = ta.form && ta.form.querySelector('input[name=pageLimit]');
+  if (limit) limit.value = nos.length > 100 ? '200' : nos.length > 50 ? '100' : '50';
   sessionStorage.setItem(KEY, JSON.stringify({ tag: tag, n: nos.length, t: Date.now() }));
 
   var search = btn('검색', 'button13');
@@ -478,10 +489,14 @@ body { margin: 0; }
   // 마이박스 담기: 해시태그 한 줄 + 상품번호를 복사하고 도매매 상품검색을 새 탭으로 연다
   function defaultTag() { const d = new Date(kstToday()).toISOString().slice(0, 10).replace(/-/g, ''); return `#${d}-01`; }
   function payload(list) { return [$('hashTag').value.trim(), ...list.map((it) => it[2])].join('\n'); }
+  const SEARCH_URL = 'https://domemedb.domeggook.com/index/item/itemDBSearch.php?fromOversea=2';
   function sendTo(list, e) {
     if (!list.length) { e.preventDefault(); toast('담을 상품이 없습니다'); return; }
+    // Tampermonkey 스크립트가 읽는 값: 주소 # 뒤에 실어 보내므로 도매매 서버로는 전송되지 않는다
+    const job = encodeURIComponent(JSON.stringify({ t: $('hashTag').value.trim(), n: list.map((it) => it[2]) }));
+    e.currentTarget.href = `${SEARCH_URL}#nsx=${job}`;
     const text = payload(list);
-    const ok = () => toast(`해시태그와 상품번호 ${list.length}개를 복사했습니다. 도매매 화면에서 '마이박스 담기' 북마크를 누르세요`);
+    const ok = () => toast(`상품 ${list.length}개를 도매매로 보냅니다. 자동 담기를 설치했다면 그대로 진행되고, 아니면 '마이박스 담기' 북마크를 누르세요`);
     try { navigator.clipboard.writeText(text).then(ok, () => fallbackCopy(text, ok)); } catch (err) { fallbackCopy(text, ok); }
   }
   function fallbackCopy(text, ok) {
