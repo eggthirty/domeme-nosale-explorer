@@ -1,0 +1,80 @@
+{
+ "salt": "9S/O9c2QimEFs7rjjH+Uuw==",
+ "iterations": 310000,
+ "check": "/BYfA6If1Z02qC/zkT9ANYjMlddiz4ZQYdStukNF6NwT2Q==",
+ "months": [
+  {
+   "month": "2026-10",
+   "asOf": "2026-10-01",
+   "items": 92869,
+   "suppliers": 113
+  },
+  {
+   "month": "2026-09",
+   "asOf": "2026-09-01",
+   "items": 54012,
+   "suppliers": 117
+  },
+  {
+   "month": "2026-08",
+   "asOf": "2026-08-03",
+   "items": 56684,
+   "suppliers": 116
+  },
+  {
+   "month": "2026-07",
+   "asOf": "2026-07-01",
+   "items": 56243,
+   "suppliers": 116
+  },
+  {
+   "month": "2026-06",
+   "asOf": "2026-06-01",
+   "items": 59345,
+   "suppliers": 119
+  },
+  {
+   "month": "2026-05",
+   "asOf": "2026-05-01",
+   "items": 66914,
+   "suppliers": 121
+  },
+  {
+   "month": "2026-04",
+   "asOf": "2026-04-01",
+   "items": 66497,
+   "suppliers": 125
+  },
+  {
+   "month": "2026-03",
+   "asOf": "2026-03-01",
+   "items": 66354,
+   "suppliers": 115
+  },
+  {
+   "month": "2026-02",
+   "asOf": "2026-02-01",
+   "items": 61133,
+   "suppliers": 116
+  },
+  {
+   "month": "2026-01",
+   "asOf": "2026-01-01",
+   "items": 61309,
+   "suppliers": 115
+  },
+  {
+   "month": "2025-12",
+   "asOf": "2025-12-01",
+   "items": 74166,
+   "suppliers": 117
+  },
+  {
+   "month": "2025-11",
+   "asOf": "2025-11-01",
+   "items": 71615,
+   "suppliers": 122
+  }
+ ],
+ "built": "2026-10-27"
+}

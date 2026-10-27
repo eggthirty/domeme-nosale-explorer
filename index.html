@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>판매이력 없는 상품 탐색기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: 창고 출고장부 — 상단 헤더 + 탭, 추천 탭은 단일 장부, 공급사 탭은 좌측 공급사 목록 + 우측 장부 */
+:root {
+  --bg: #f3f5f2;
+  --surface: #ffffff;
+  --ink: #18221e;
+  --muted: #5d6b65;
+  --line: #d9dfdb;
+  --accent: #0e6b57;
+  --accent-ink: #ffffff;
+  --tag: #f1c84b;
+  --tag-ink: #3a2c00;
+  --hover: #e8eeea;
+  --font-display: "Black Han Sans", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Consolas", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111715; --surface: #18201d; --ink: #e6ece9; --muted: #95a39d; --line: #2c3833;
+    --accent: #3fbf9c; --accent-ink: #0b1411; --tag: #d9b23e; --tag-ink: #1e1700; --hover: #1f2a26;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111715; --surface: #18201d; --ink: #e6ece9; --muted: #95a39d; --line: #2c3833;
+  --accent: #3fbf9c; --accent-ink: #0b1411; --tag: #d9b23e; --tag-ink: #1e1700; --hover: #1f2a26;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 18px; }
+header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
+h1 { font-family: var(--font-display); font-weight: 400; font-size: clamp(26px, 4vw, 36px); line-height: 1.1; margin: 0; text-wrap: balance; }
+.sub { color: var(--muted); margin: 6px 0 0; font-size: 14px; }
+.stamp { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { font-size: 12px; letter-spacing: .03em; padding: 4px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); color: var(--muted); font-variant-numeric: tabular-nums; }
+.chip b { color: var(--ink); font-weight: 600; }
+.chip.month { display: flex; align-items: center; gap: 6px; padding: 2px 4px 2px 10px; border-color: var(--accent); color: var(--ink); }
+.chip.month select { font-weight: 600; padding: 3px 8px; border: 0; background: var(--hover); border-radius: 999px; }
+.loading-mask { opacity: .45; pointer-events: none; }
+a.btn { text-decoration: none; display: inline-flex; align-items: center; }
+.mybox { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.mybox summary { cursor: pointer; padding: 10px 14px; font-weight: 600; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.mybox summary .hint { font-weight: 400; font-size: 13px; color: var(--muted); }
+.mybox-body { padding: 0 14px 14px; display: grid; gap: 10px; }
+.steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 14px; max-width: 72ch; }
+.bm { display: inline-block; padding: 3px 12px; border-radius: 999px; background: var(--tag); color: var(--tag-ink); font-weight: 600; text-decoration: none; cursor: grab; border: 1px dashed var(--tag-ink); }
+kbd { font-family: var(--font-mono); font-size: 12px; padding: 1px 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); }
+#hashTag { font: inherit; font-family: var(--font-mono); font-size: 14px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; width: 170px; }
+nav.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+nav.tabs button { font: inherit; font-weight: 600; background: none; border: 0; padding: 10px 14px; color: var(--muted); cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+nav.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; }
+.bar label { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+input[type="search"], input[type="number"], select {
+  font: inherit; font-size: 14px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; min-width: 0;
+}
+input[type="number"] { width: 110px; font-variant-numeric: tabular-nums; }
+.btn { font: inherit; font-size: 14px; font-weight: 600; border-radius: 6px; padding: 7px 14px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.btn:hover { background: var(--hover); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.daynav { display: flex; align-items: center; gap: 6px; }
+.daynav .date { font-family: var(--font-mono); font-size: 15px; padding: 0 6px; font-variant-numeric: tabular-nums; }
+.note { font-size: 13px; color: var(--muted); margin: 0; }
+.spacer { flex: 1; }
+
+.ledger { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; min-width: 0; }
+.row { display: grid; grid-template-columns: 44px 104px minmax(0, 1fr) 110px 128px 92px; gap: 12px; align-items: center; padding: 9px 14px; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.row:first-child { border-top: 0; }
+.row.head { font-size: 12px; letter-spacing: .04em; color: var(--muted); background: var(--bg); }
+.row:not(.head):hover { background: var(--hover); }
+.n { color: var(--muted); font-size: 12px; text-align: right; }
+.no { font-family: var(--font-mono); font-size: 13px; }
+.no a { color: var(--accent); text-decoration: none; }
+.no a:hover { text-decoration: underline; }
+.title { overflow-wrap: anywhere; }
+.price { text-align: right; font-weight: 600; }
+.price small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; }
+.sup button { font: inherit; font-size: 13px; background: none; border: 0; padding: 0; color: var(--ink); cursor: pointer; text-align: left; overflow-wrap: anywhere; text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
+.reg { font-size: 13px; color: var(--muted); }
+.new { display: inline-block; margin-left: 6px; font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 3px; background: var(--tag); color: var(--tag-ink); vertical-align: 1px; }
+.empty, .loading { padding: 40px 16px; text-align: center; color: var(--muted); }
+
+.split { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; align-items: start; }
+.suppliers { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; display: grid; grid-template-rows: auto 1fr; max-height: 75vh; min-width: 0; }
+.suppliers .head { padding: 10px; border-bottom: 1px solid var(--line); }
+.suppliers .head input { width: 100%; }
+.suplist { overflow-y: auto; }
+.suplist button { display: flex; width: 100%; justify-content: space-between; gap: 8px; font: inherit; font-size: 14px; padding: 7px 12px; background: none; border: 0; border-top: 1px solid var(--line); color: var(--ink); cursor: pointer; text-align: left; }
+.suplist button:first-child { border-top: 0; }
+.suplist button:hover { background: var(--hover); }
+.suplist button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.suplist .cnt { font-variant-numeric: tabular-nums; opacity: .75; font-size: 13px; }
+.results { display: grid; gap: 12px; min-width: 0; }
+.pager { display: flex; justify-content: center; align-items: center; gap: 10px; font-size: 14px; font-variant-numeric: tabular-nums; }
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 6px; font-size: 14px; }
+
+@media (max-width: 860px) {
+  .split { grid-template-columns: 1fr; }
+  .suppliers { max-height: 260px; }
+}
+@media (max-width: 720px) {
+  .row.head { display: none; }
+  .row { grid-template-columns: 1fr auto; grid-template-areas: "title price" "no price" "sup reg"; gap: 2px 12px; }
+  .row .n { display: none; }
+  .row .title { grid-area: title; font-weight: 500; }
+  .row .no { grid-area: no; }
+  .row .price { grid-area: price; align-self: start; }
+  .row .sup { grid-area: sup; }
+  .row .reg { grid-area: reg; text-align: right; }
+  input[type="number"] { width: 92px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+[hidden] { display: none !important; }
+html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; }
+.gate { min-height: 70vh; display: grid; place-items: center; }
+.gate form { width: min(380px, 100%); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 24px; display: grid; gap: 12px; }
+.gate h1 { font-size: 26px; }
+.gate p { margin: 0; color: var(--muted); font-size: 14px; }
+.gate input[type="password"] { font: inherit; font-size: 16px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; width: 100%; }
+.gate .err { color: #b3261e; font-size: 14px; min-height: 1.2em; }
+.gate label.keep { font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+</style>
+</head>
+<body>
+<div class="gate" id="gate">
+  <form id="gateForm" autocomplete="off">
+    <h1>판매이력 없는 상품 탐색기</h1>
+    <p>수업에서 안내받은 접속 비밀번호를 입력하세요.</p>
+    <input type="password" id="gatePw" aria-label="접속 비밀번호" placeholder="접속 비밀번호" required>
+    <label class="keep"><input type="checkbox" id="gateKeep" checked> 이 기기에서 비밀번호 기억하기</label>
+    <button class="btn primary" type="submit" id="gateBtn">들어가기</button>
+    <div class="err" id="gateErr" role="alert"></div>
+  </form>
+</div>
+
+<div class="wrap" id="app" hidden>
+  <header>
+    <div>
+      <h1>판매이력 없는 상품 탐색기</h1>
+      <p class="sub">도매꾹·도매매에서 아직 한 번도 팔리지 않은 상품을 공급사별로 찾고, 매일 원하는 개수만큼 골라 봅니다.</p>
+    </div>
+    <div class="stamp">
+      <label class="chip month">기준 월
+        <select id="month" aria-label="기준 월 선택"></select>
+      </label>
+      <span class="chip">추출일 <b id="asOf">—</b></span>
+      <span class="chip">상품 <b id="totalItems">—</b></span>
+      <span class="chip">공급사 <b id="totalSup">—</b></span>
+    </div>
+  </header>
+
+  <details class="mybox" id="myboxPanel">
+    <summary>도매매 마이박스에 담기 <span class="hint">처음이면 펼쳐서 북마크 버튼을 먼저 설치하세요</span></summary>
+    <div class="mybox-body">
+      <ol class="steps">
+        <li><b>처음 한 번:</b> 아래 <a class="bm" id="bmLink" href="#">마이박스 담기</a> 버튼을 브라우저 즐겨찾기 막대로 끌어다 놓습니다. 막대가 안 보이면 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>.</li>
+        <li>도매매에 로그인합니다.</li>
+        <li>여기서 상품을 고르고 <b>[도매매에 담기]</b>를 누릅니다. 해시태그와 상품번호가 복사되고 도매매 상품검색이 열립니다.</li>
+        <li>열린 도매매 화면에서 즐겨찾기의 <b>마이박스 담기</b>를 누릅니다. 처음 한 번은 Chrome이 <b>클립보드 읽기를 허용할지</b> 묻습니다. <b>허용</b>을 누르면 다음부터는 바로 진행됩니다. 차단하면 붙여넣기 창이 뜨니 <kbd>Ctrl</kbd>+<kbd>V</kbd> 후 확인을 누르세요.</li>
+        <li>번호 추가 → 수량별비례·구간별배송료 상품 제외 → 검색 → 전체선택 → 해시태그 → 마이박스담기까지 자동으로 진행됩니다. 검색 뒤 화면이 새로 열리면 <b>마이박스 담기</b>를 한 번 더 누릅니다.</li>
+      </ol>
+      <div class="bar">
+        <label for="hashTag">해시태그</label>
+        <input type="text" id="hashTag" value="" spellcheck="false" aria-label="마이박스 해시태그">
+        <button class="btn" id="tagNext" type="button">다음 묶음 번호</button>
+        <button class="btn" id="copyBm" type="button">북마크 코드 복사</button>
+      </div>
+      <p class="note">이미 북마크를 설치했다면 지우고 새로 끌어다 놓아야 클립보드 읽기가 적용됩니다. 끌어다 놓기가 안 되면 [북마크 코드 복사]를 누르고, 즐겨찾기 추가 화면의 URL 칸에 붙여넣으세요. 도매매는 한 번에 2만 개까지 담을 수 있습니다.</p>
+    </div>
+  </details>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tab-today" aria-selected="true" data-tab="today">오늘의 추천</button>
+    <button role="tab" id="tab-supplier" aria-selected="false" data-tab="supplier">공급사별 검색</button>
+  </nav>
+
+  <section id="view-today" class="results">
+    <div class="bar">
+      <div class="daynav">
+        <button class="btn" id="prevDay" aria-label="전날 추천">◀</button>
+        <span class="date" id="dayLabel">—</span>
+        <button class="btn" id="nextDay" aria-label="다음날 추천">▶</button>
+        <button class="btn" id="todayBtn">오늘</button>
+      </div>
+      <label>추천 개수 <select id="tCount"><option>10</option><option>20</option><option>50</option><option selected>100</option><option>200</option></select>개</label>
+      <label>가격 <input type="number" id="tMin" placeholder="최소" min="0" step="1000"> ~ <input type="number" id="tMax" placeholder="최대" min="0" step="1000"> 원</label>
+      <label>공급사당 최대 <select id="tCap"><option>1</option><option>2</option><option selected>3</option><option>5</option><option>10</option></select>개</label>
+      <label><input type="checkbox" id="tRecent"> 최근 1년 등록 상품만</label>
+      <span class="spacer"></span>
+      <button class="btn" id="copyToday">상품번호 복사</button>
+      <a class="btn primary" id="sendToday" href="https://domemedb.domeggook.com/index/item/itemDBSearch.php?fromOversea=2" target="_blank" rel="noopener">도매매에 담기</a>
+    </div>
+    <p class="note" id="todayNote">같은 날짜·같은 조건이면 누가 열어도 같은 100개가 나옵니다. 한 공급사에 몰리지 않도록 공급사당 개수를 제한합니다.</p>
+    <div class="ledger" id="todayList"><div class="loading">상품 목록을 불러오는 중…</div></div>
+  </section>
+
+  <section id="view-supplier" class="split" hidden>
+    <aside class="suppliers">
+      <div class="head"><input type="search" id="supFilter" placeholder="공급사 아이디 찾기" aria-label="공급사 아이디 찾기"></div>
+      <div class="suplist" id="supList"></div>
+    </aside>
+    <div class="results">
+      <div class="bar">
+        <input type="search" id="kw" placeholder="상품명 검색 (예: 텀블러)" aria-label="상품명 검색" style="flex:1 1 200px">
+        <label>가격 <input type="number" id="sMin" placeholder="최소" min="0" step="1000"> ~ <input type="number" id="sMax" placeholder="최대" min="0" step="1000"></label>
+        <select id="sort" aria-label="정렬">
+          <option value="new">최근 등록순</option>
+          <option value="old">오래된 등록순</option>
+          <option value="low">낮은 가격순</option>
+          <option value="high">높은 가격순</option>
+        </select>
+        <label>한 번에 <select id="sSize"><option>10</option><option>20</option><option>50</option><option selected>100</option><option>200</option></select>개씩</label>
+        <button class="btn" id="copySup">이 페이지 번호 복사</button>
+        <a class="btn primary" id="sendSup" href="https://domemedb.domeggook.com/index/item/itemDBSearch.php?fromOversea=2" target="_blank" rel="noopener">도매매에 담기</a>
+      </div>
+      <p class="note" id="supNote">—</p>
+      <div class="ledger" id="supResults"><div class="loading">상품 목록을 불러오는 중…</div></div>
+      <div class="pager" id="pager"></div>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script type="text/plain" id="bmSrc">
+(function () {
+  var KEY = 'nsxMybox';
+  var SEARCH_URL = 'https://domemedb.domeggook.com/index/item/itemDBSearch.php?fromOversea=2';
+  function btn(label, cls) {
+    return [].slice.call(document.querySelectorAll('button, input[type=button], a')).filter(function (b) {
+      return (b.innerText || b.value || '').trim() === label && (!cls || b.classList.contains(cls));
+    })[0];
+  }
+  function fire(el, type) { el.dispatchEvent(new Event(type, { bubbles: true })); }
+  function setChecked(el, on) { if (el && el.checked !== on) el.click(); }
+  function resultBoxes() {
+    var head = [].slice.call(document.querySelectorAll('th, td')).filter(function (c) { return /상품이미지/.test(c.innerText || ''); })[0];
+    var table = head && head.closest('table');
+    return table ? [].slice.call(table.querySelectorAll('tbody input[type=checkbox]')) : [];
+  }
+  function selectAllBox() {
+    return [].slice.call(document.querySelectorAll('input[type=checkbox]')).filter(function (e) {
+      var t = (e.closest('label') || e.parentElement || {}).innerText || '';
+      return /전체선택/.test(t);
+    })[0];
+  }
+
+  if (!/domemedb\.domeggook\.com/.test(location.hostname) || !document.getElementById('search')) {
+    if (confirm('도매매 상품검색 화면에서 눌러 주세요.\n지금 상품검색 화면으로 이동할까요?')) location.href = SEARCH_URL;
+    return;
+  }
+
+  var pending = null;
+  try { pending = JSON.parse(sessionStorage.getItem(KEY)); } catch (e) {}
+
+  // 2단계: 검색 결과가 나온 화면 → 전체선택, 해시태그, 마이박스담기
+  function finish(tag) {
+    var boxes = resultBoxes();
+    if (!boxes.length) { alert('검색된 상품이 없습니다. 품절되었거나 판매가 끝난 상품일 수 있습니다.'); sessionStorage.removeItem(KEY); return; }
+    var all = selectAllBox();
+    if (all) setChecked(all, true); else boxes.forEach(function (b) { setChecked(b, true); });
+    var tagInput = document.getElementById('keywordTags');
+    if (tagInput && tag) { tagInput.value = tag; fire(tagInput, 'input'); fire(tagInput, 'change'); }
+    sessionStorage.removeItem(KEY);
+    var mb = btn('마이박스담기');
+    if (!mb) { alert('마이박스담기 버튼을 찾지 못했습니다.'); return; }
+    mb.click();
+  }
+
+  if (pending && resultBoxes().length) { finish(pending.tag); return; }
+
+  // 1단계: 클립보드에서 해시태그 + 상품번호를 읽는다 (처음 한 번 Chrome이 허용 여부를 묻는다)
+  function askPaste(prefill) {
+    return prompt('탐색기에서 복사한 내용을 붙여넣으세요.\n(해시태그 한 줄 + 상품번호, 줄바꿈이나 쉼표로 구분)', prefill || '');
+  }
+  function fromExplorer(t) { return /^\s*#\S+[\s\S]*\d{5,}/.test(t || ''); }
+  if (navigator.clipboard && navigator.clipboard.readText) {
+    navigator.clipboard.readText().then(function (t) {
+      start(fromExplorer(t) ? t : askPaste(''));
+    }, function () { start(askPaste('')); });
+  } else {
+    start(askPaste(''));
+  }
+
+  // 상품번호 넣고 추가 → 제외 조건 체크 → 검색
+  function start(text) {
+  if (!text) return;
+  var tag = (text.match(/#[^\s,]+/) || [''])[0];
+  var nos = (text.replace(/#[^\s,]+/g, ' ').match(/\d{5,}/g) || []);
+  nos = nos.filter(function (n, i) { return nos.indexOf(n) === i; });
+  if (!nos.length) { alert('상품번호를 찾지 못했습니다. 탐색기의 [도매매에 담기]로 다시 복사해 주세요.'); return; }
+  if (nos.length > 2000) { alert('한 번에 2,000개까지만 넣을 수 있습니다.'); return; }
+
+  var sf = document.getElementById('sf');
+  if (sf) { sf.value = 'no'; fire(sf, 'change'); }
+  var ta = document.getElementById('search');
+  ta.value = nos.join('\n'); fire(ta, 'input');
+  var add = btn('추가', 'n_button2');
+  if (add) add.click();
+  setChecked(document.getElementById('pp1'), true);
+  setChecked(document.getElementById('pp2'), true);
+  sessionStorage.setItem(KEY, JSON.stringify({ tag: tag, n: nos.length, t: Date.now() }));
+
+  var search = btn('검색', 'button13');
+  if (!search) { alert('검색 버튼을 찾지 못했습니다.'); return; }
+  var before = resultBoxes().length;
+  setTimeout(function () {
+    search.click();
+    // 결과가 같은 화면에 바로 뜨면 이어서 담고, 화면이 새로 열리면 북마크를 한 번 더 누르면 된다
+    var tries = 0;
+    var timer = setInterval(function () {
+      tries++;
+      var boxes = resultBoxes();
+      if (boxes.length && boxes.length !== before) { clearInterval(timer); setTimeout(function () { finish(tag); }, 600); }
+      else if (tries > 40) clearInterval(timer);
+    }, 500);
+  }, 400);
+  }
+})();
+</script>
+<script>
+(() => {
+  let PAGE = 100;
+  const EPOCH = Date.UTC(2000, 0, 1);
+  const $ = (id) => document.getElementById(id);
+  let DATA = null, SUP = [], ITEMS = [], supCount = [];
+  const state = { tab: 'today', dayOffset: 0, sup: -1, page: 0 };
+
+  const store = {
+    get(k) { try { return JSON.parse(localStorage.getItem('nsx:' + k)); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem('nsx:' + k, JSON.stringify(v)); } catch (e) {} }
+  };
+
+  const fmtWon = (n) => n.toLocaleString('ko-KR') + '원';
+  const fmtDay = (d) => { if (d < 0) return '—'; const t = new Date(EPOCH + d * 864e5); return t.toISOString().slice(0, 10); };
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  function kstToday() {
+    const now = new Date(Date.now() + 9 * 36e5);
+    return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  }
+  function dayKey() { return new Date(kstToday() + state.dayOffset * 864e5).toISOString().slice(0, 10); }
+  function todayDays() { return Math.floor((kstToday() - EPOCH) / 864e5); }
+
+  // 날짜 문자열 + 상품번호로 정해지는 해시: 같은 날 같은 조건이면 같은 결과
+  function hash(str, n) {
+    let h = 2166136261 ^ n;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+    h ^= n >>> 7; h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909);
+    return (h ^ (h >>> 16)) >>> 0;
+  }
+
+  function rowHtml(it, i) {
+    const [s, title, no, price, reg, tier] = it;
+    const isNew = reg >= 0 && todayDays() - reg <= 90;
+    const tierNote = tier ? `<small>수량별 단가</small>` : '';
+    return `<div class="row">
+      <span class="n">${i + 1}</span>
+      <span class="no"><a href="https://domeme.domeggook.com/s/${no}" target="_blank" rel="noopener">${no}</a></span>
+      <span class="title">${esc(title)}${isNew ? '<span class="new">신규</span>' : ''}</span>
+      <span class="price">${price ? fmtWon(price) : '—'}${tierNote}</span>
+      <span class="sup"><button data-sup="${s}" title="이 공급사 상품 전체 보기">${esc(SUP[s])}</button></span>
+      <span class="reg">${fmtDay(reg)}</span>
+    </div>`;
+  }
+  const headHtml = `<div class="row head"><span class="n">#</span><span>상품번호</span><span>상품명</span><span class="price">가격</span><span>공급사</span><span>등록일</span></div>`;
+
+  function num(id) { const v = $(id).value.trim(); return v === '' ? null : Number(v); }
+  function priceOk(p, mn, mx) { return (mn == null || p >= mn) && (mx == null || p <= mx); }
+
+  let todayPicked = [];
+  function renderToday() {
+    const key = dayKey();
+    $('dayLabel').textContent = key;
+    $('nextDay').disabled = state.dayOffset >= 0;
+    const mn = num('tMin'), mx = num('tMax'), cap = Number($('tCap').value), recent = $('tRecent').checked, want = Number($('tCount').value);
+    const minReg = todayDays() - 365;
+    const pool = [];
+    for (let i = 0; i < ITEMS.length; i++) {
+      const it = ITEMS[i];
+      if (!priceOk(it[3], mn, mx)) continue;
+      if (recent && it[4] < minReg) continue;
+      pool.push([hash(key, it[2]), i]);
+    }
+    pool.sort((a, b) => a[0] - b[0]);
+    const per = new Map(); todayPicked = [];
+    for (const [, i] of pool) {
+      const s = ITEMS[i][0], c = per.get(s) || 0;
+      if (c >= cap) continue;
+      per.set(s, c + 1); todayPicked.push(ITEMS[i]);
+      if (todayPicked.length >= want) break;
+    }
+    $('copyToday').textContent = `상품번호 ${todayPicked.length}개 복사`;
+    $('todayList').innerHTML = todayPicked.length
+      ? headHtml + todayPicked.map(rowHtml).join('')
+      : `<div class="empty">조건에 맞는 상품이 없습니다. 가격 범위를 넓히거나 '최근 1년 등록' 체크를 해제해 보세요.</div>`;
+    $('todayNote').textContent = `${key} 추천 · 조건에 맞는 상품 ${pool.length.toLocaleString('ko-KR')}개 중 ${todayPicked.length}개, 공급사 ${per.size}곳. 같은 날짜·같은 조건이면 누가 열어도 같은 목록이 나옵니다.`;
+  }
+
+  function renderSupList() {
+    const q = $('supFilter').value.trim().toLowerCase();
+    const order = SUP.map((n, i) => i).sort((a, b) => supCount[b] - supCount[a]);
+    const total = ITEMS.length;
+    let html = `<button data-pick="-1" aria-pressed="${state.sup === -1}"><span>전체 공급사</span><span class="cnt">${total.toLocaleString('ko-KR')}</span></button>`;
+    for (const i of order) {
+      if (q && !SUP[i].toLowerCase().includes(q)) continue;
+      html += `<button data-pick="${i}" aria-pressed="${state.sup === i}"><span>${esc(SUP[i])}</span><span class="cnt">${supCount[i].toLocaleString('ko-KR')}</span></button>`;
+    }
+    $('supList').innerHTML = html;
+  }
+
+  let supRows = [];
+  function renderSupResults() {
+    const words = $('kw').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const mn = num('sMin'), mx = num('sMax'), sort = $('sort').value;
+    supRows = ITEMS.filter((it) =>
+      (state.sup === -1 || it[0] === state.sup) && priceOk(it[3], mn, mx) &&
+      (!words.length || words.every((w) => it[1].toLowerCase().includes(w))));
+    const cmp = { new: (a, b) => b[4] - a[4], old: (a, b) => a[4] - b[4], low: (a, b) => a[3] - b[3], high: (a, b) => b[3] - a[3] }[sort];
+    supRows.sort(cmp);
+    const pages = Math.max(1, Math.ceil(supRows.length / PAGE));
+    if (state.page >= pages) state.page = pages - 1;
+    const slice = supRows.slice(state.page * PAGE, state.page * PAGE + PAGE);
+    const who = state.sup === -1 ? '전체 공급사' : SUP[state.sup];
+    $('supNote').textContent = `${who} · ${supRows.length.toLocaleString('ko-KR')}개 상품${words.length ? ` · "${words.join(' ')}" 포함` : ''}`;
+    $('supResults').innerHTML = slice.length
+      ? headHtml + slice.map((it, i) => rowHtml(it, state.page * PAGE + i)).join('')
+      : `<div class="empty">찾는 상품이 없습니다. 검색어를 줄이거나 다른 공급사를 골라 보세요.</div>`;
+    $('pager').innerHTML = pages > 1
+      ? `<button class="btn" data-pg="-1" ${state.page === 0 ? 'disabled' : ''}>이전</button><span>${state.page + 1} / ${pages}</span><button class="btn" data-pg="1" ${state.page >= pages - 1 ? 'disabled' : ''}>다음</button>`
+      : '';
+    $('copySup').textContent = `이 페이지 번호 ${slice.length}개 복사`;
+  }
+
+  function setTab(t) {
+    state.tab = t; store.set('tab', t);
+    for (const b of document.querySelectorAll('nav.tabs button')) b.setAttribute('aria-selected', String(b.dataset.tab === t));
+    $('view-today').hidden = t !== 'today';
+    $('view-supplier').hidden = t !== 'supplier';
+  }
+  function pickSupplier(i) {
+    state.sup = i; state.page = 0; store.set('sup', SUP[i] || null);
+    renderSupList(); renderSupResults();
+  }
+
+  let toastTimer;
+  function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 2200); }
+  function copy(list) {
+    const text = list.map((it) => it[2]).join('\n');
+    const done = () => toast(`상품번호 ${list.length}개를 복사했습니다`);
+    const fallback = () => {
+      const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+      let ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+      ta.remove(); ok ? done() : toast('복사하지 못했습니다. 목록에서 직접 선택해 주세요');
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+    else fallback();
+  }
+
+  // 마이박스 담기: 해시태그 한 줄 + 상품번호를 복사하고 도매매 상품검색을 새 탭으로 연다
+  function defaultTag() { const d = new Date(kstToday()).toISOString().slice(0, 10).replace(/-/g, ''); return `#${d}-01`; }
+  function payload(list) { return [$('hashTag').value.trim(), ...list.map((it) => it[2])].join('\n'); }
+  function sendTo(list, e) {
+    if (!list.length) { e.preventDefault(); toast('담을 상품이 없습니다'); return; }
+    const text = payload(list);
+    const ok = () => toast(`해시태그와 상품번호 ${list.length}개를 복사했습니다. 도매매 화면에서 '마이박스 담기' 북마크를 누르세요`);
+    try { navigator.clipboard.writeText(text).then(ok, () => fallbackCopy(text, ok)); } catch (err) { fallbackCopy(text, ok); }
+  }
+  function fallbackCopy(text, ok) {
+    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+    let done = false; try { done = document.execCommand('copy'); } catch (e) {}
+    ta.remove(); done ? ok() : toast('복사하지 못했습니다. [상품번호 복사]를 쓰고 해시태그는 직접 입력해 주세요');
+  }
+  function wireMybox() {
+    const src = $('bmSrc').textContent.trim();
+    const href = 'javascript:' + encodeURIComponent(src);
+    $('bmLink').setAttribute('href', href);
+    $('bmLink').addEventListener('click', (e) => { e.preventDefault(); toast('이 버튼은 클릭하지 말고 즐겨찾기 막대로 끌어다 놓으세요'); });
+    $('copyBm').addEventListener('click', () => {
+      const ok = () => toast('북마크 코드를 복사했습니다. 즐겨찾기 추가 화면의 URL 칸에 붙여넣으세요');
+      try { navigator.clipboard.writeText(href).then(ok, () => fallbackCopy(href, ok)); } catch (err) { fallbackCopy(href, ok); }
+    });
+    const saved = store.get('tag');
+    $('hashTag').value = saved && saved.day === defaultTag().slice(1, 9) ? saved.tag : defaultTag();
+    const keep = () => store.set('tag', { day: defaultTag().slice(1, 9), tag: $('hashTag').value.trim() });
+    $('hashTag').addEventListener('change', keep);
+    $('tagNext').addEventListener('click', () => {
+      const m = $('hashTag').value.trim().match(/^(.*-)(\d+)$/);
+      $('hashTag').value = m ? m[1] + String(Number(m[2]) + 1).padStart(m[2].length, '0') : defaultTag();
+      keep();
+    });
+    $('sendToday').addEventListener('click', (e) => sendTo(todayPicked, e));
+    $('sendSup').addEventListener('click', (e) => sendTo(supRows.slice(state.page * PAGE, state.page * PAGE + PAGE), e));
+    try { if (!localStorage.getItem('nsx:bmSeen')) { $('myboxPanel').open = true; localStorage.setItem('nsx:bmSeen', '1'); } } catch (e) {}
+  }
+
+  function debounce(fn, ms) { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; }
+
+  function wire() {
+    for (const b of document.querySelectorAll('nav.tabs button')) b.addEventListener('click', () => setTab(b.dataset.tab));
+    $('prevDay').addEventListener('click', () => { state.dayOffset--; renderToday(); });
+    $('nextDay').addEventListener('click', () => { if (state.dayOffset < 0) { state.dayOffset++; renderToday(); } });
+    $('todayBtn').addEventListener('click', () => { state.dayOffset = 0; renderToday(); });
+    const rt = debounce(() => { store.set('today', { mn: $('tMin').value, mx: $('tMax').value, cap: $('tCap').value, recent: $('tRecent').checked, count: $('tCount').value }); renderToday(); }, 250);
+    for (const id of ['tMin', 'tMax', 'tCap', 'tRecent', 'tCount']) { $(id).addEventListener('input', rt); $(id).addEventListener('change', rt); }
+    $('copyToday').addEventListener('click', () => copy(todayPicked));
+    $('copySup').addEventListener('click', () => copy(supRows.slice(state.page * PAGE, state.page * PAGE + PAGE)));
+    $('supFilter').addEventListener('input', renderSupList);
+    $('supList').addEventListener('click', (e) => { const b = e.target.closest('button[data-pick]'); if (b) pickSupplier(Number(b.dataset.pick)); });
+    const rs = debounce(() => { state.page = 0; renderSupResults(); }, 250);
+    $('sSize').addEventListener('change', () => { PAGE = Number($('sSize').value); store.set('size', $('sSize').value); state.page = 0; renderSupResults(); });
+    for (const id of ['kw', 'sMin', 'sMax', 'sort']) { $(id).addEventListener('input', rs); $(id).addEventListener('change', rs); }
+    $('pager').addEventListener('click', (e) => { const b = e.target.closest('button[data-pg]'); if (!b) return; state.page += Number(b.dataset.pg); renderSupResults(); $('view-supplier').scrollIntoView({ block: 'start' }); });
+    document.addEventListener('click', (e) => {
+      const b = e.target.closest('.sup button[data-sup]'); if (!b) return;
+      setTab('supplier'); $('supFilter').value = ''; pickSupplier(Number(b.dataset.sup)); window.scrollTo({ top: 0 });
+    });
+  }
+
+  function restore() {
+    const t = store.get('today');
+    const sizes = ['10', '20', '50', '100', '200'];
+    if (t) { $('tMin').value = t.mn || ''; $('tMax').value = t.mx || ''; if (t.cap) $('tCap').value = t.cap; $('tRecent').checked = !!t.recent; if (sizes.includes(t.count)) $('tCount').value = t.count; }
+    const sz = store.get('size'); if (sizes.includes(sz)) { $('sSize').value = sz; PAGE = Number(sz); }
+    const tab = store.get('tab'); if (tab === 'supplier' || tab === 'today') setTab(tab);
+    const m = store.get('month'); if (m && [...$('month').options].some((o) => o.value === m)) $('month').value = m;
+  }
+
+  // 월별 데이터는 처음 고를 때 한 번만 받아 두고 다시 쓴다
+  const cache = new Map();
+  let loadSeq = 0;
+  function loadMonth(key) {
+    const seq = ++loadSeq;
+    const supName = state.sup >= 0 ? SUP[state.sup] : store.get('sup');
+    for (const id of ['todayList', 'supResults']) $(id).classList.add('loading-mask');
+    if (!cache.has(key)) cache.set(key, readMonth(key));
+    cache.get(key).then((d) => {
+      if (seq !== loadSeq) return;
+      DATA = d; SUP = d.suppliers; ITEMS = d.items;
+      supCount = new Array(SUP.length).fill(0); for (const it of ITEMS) supCount[it[0]]++;
+      state.sup = supName ? SUP.indexOf(supName) : -1; state.page = 0;
+      $('asOf').textContent = d.asOf;
+      $('totalItems').textContent = ITEMS.length.toLocaleString('ko-KR') + '개';
+      $('totalSup').textContent = SUP.length + '곳';
+      for (const id of ['todayList', 'supResults']) $(id).classList.remove('loading-mask');
+      renderToday(); renderSupList(); renderSupResults();
+      if (supName && state.sup === -1) toast(`${supName} 공급사는 이 달 리스트에 없어 전체 공급사를 보여 줍니다`);
+    }).catch(() => {
+      cache.delete(key);
+      if (seq !== loadSeq) return;
+      const msg = '<div class="empty">이 달 상품 목록을 불러오지 못했습니다. 다시 선택하거나 새로고침해 주세요.</div>';
+      for (const id of ['todayList', 'supResults']) { $(id).classList.remove('loading-mask'); $(id).innerHTML = msg; }
+    });
+  }
+
+  // ---- 접속 비밀번호 / 데이터 복호화 ----
+  let KEY = null, META = null;
+  const b64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  const toB64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+  async function deriveKey(pw) {
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
+    const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: b64(META.salt), iterations: META.iterations }, base, 256);
+    return bits;
+  }
+  async function importKey(raw) { return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']); }
+  async function decrypt(key, bytes) {
+    return crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes.slice(0, 12) }, key, bytes.slice(12));
+  }
+  async function verify(key) {
+    try { const out = await decrypt(key, b64(META.check)); return new TextDecoder().decode(out) === 'nsx-ok'; } catch (e) { return false; }
+  }
+  async function readMonth(month) {
+    const r = await fetch(`data/${month}.bin`, { cache: 'no-cache' });
+    if (!r.ok) throw new Error(r.status);
+    const plain = await decrypt(KEY, new Uint8Array(await r.arrayBuffer()));
+    const text = await new Response(new Blob([plain]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+    return JSON.parse(text);
+  }
+  function fillMonths() {
+    const sel = $('month');
+    sel.innerHTML = META.months.map((m) => {
+      const [y, mm] = m.month.split('-');
+      return `<option value="${m.month}">${y}년 ${Number(mm)}월</option>`;
+    }).join('');
+  }
+  function openApp() {
+    $('gate').hidden = true; $('app').hidden = false;
+    fillMonths();
+    wire();
+    wireMybox();
+    restore();
+    $('month').addEventListener('change', () => { store.set('month', $('month').value); loadMonth($('month').value); });
+    loadMonth($('month').value);
+  }
+  async function boot() {
+    try {
+      const r = await fetch('data/meta.json', { cache: 'no-cache' });
+      if (!r.ok) throw new Error(r.status);
+      META = await r.json();
+    } catch (e) {
+      $('gateErr').textContent = '데이터 목록을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.';
+      return;
+    }
+    const saved = store.get('key');
+    if (saved && saved.salt === META.salt) {
+      const k = await importKey(b64(saved.raw));
+      if (await verify(k)) { KEY = k; openApp(); return; }
+    }
+    $('gatePw').focus();
+  }
+  $('gateForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!META) return;
+    $('gateBtn').disabled = true; $('gateErr').textContent = '확인 중…';
+    const raw = await deriveKey($('gatePw').value);
+    const k = await importKey(raw);
+    if (!(await verify(k))) {
+      $('gateBtn').disabled = false; $('gateErr').textContent = '비밀번호가 맞지 않습니다. 수업 안내를 다시 확인해 주세요.';
+      $('gatePw').select(); return;
+    }
+    if ($('gateKeep').checked) store.set('key', { salt: META.salt, raw: toB64(raw) });
+    KEY = k; $('gatePw').value = ''; openApp();
+  });
+  boot();
+})();
+</script>
+</body>
+</html>
