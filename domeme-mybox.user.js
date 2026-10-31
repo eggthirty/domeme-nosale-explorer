@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         도매매 마이박스 자동 담기 (판매이력 없는 상품 탐색기)
 // @namespace    https://eggthirty.github.io/domeme-nosale-explorer/
-// @version      1.1.0
+// @version      1.1.1
 // @description  탐색기에서 [도매매에 담기]를 누르면 상품번호 검색, 해시태그 입력, 마이박스담기까지 자동으로 진행합니다.
 // @match        https://domemedb.domeggook.com/index/item/itemDBSearch.php*
 // @run-at       document-idle
@@ -38,13 +38,52 @@
 
   // 화면 왼쪽 아래 진행 상황 안내
   var box;
+  var NSX_FONT = '"Apple SD Gothic Neo","Malgun Gothic","맑은 고딕",sans-serif';
+  // 도매매 CSS가 섞이지 않도록 스타일은 nsx- 접두어 + 루트 all:initial 로 격리
+  function nsxStyle() {
+    if (document.getElementById('nsx-style')) return;
+    var st = document.createElement('style');
+    st.id = 'nsx-style';
+    st.textContent =
+      '.nsx-card,.nsx-card *{all:initial;box-sizing:border-box;font-family:' + NSX_FONT + ';}' +
+      '.nsx-card{position:fixed;left:16px;bottom:96px;z-index:2147483000;display:block;width:340px;max-width:calc(100vw - 32px);' +
+        'background:#FFFFFF;color:#121722;border:1px solid #DDE2EA;border-left:4px solid #2047D6;border-radius:10px;overflow:hidden;' +
+        'box-shadow:0 12px 32px rgba(18,23,34,.18),0 2px 6px rgba(18,23,34,.08);font-size:14px;line-height:1.55;}' +
+      '.nsx-head{display:flex;align-items:center;gap:8px;padding:9px 14px;background:#2047D6;color:#FFFFFF;font-size:12px;font-weight:700;letter-spacing:.01em;line-height:1.4;}' +
+      '.nsx-dot{display:inline-block;flex:none;width:8px;height:8px;border-radius:50%;background:#FFC83D;animation:nsx-pulse 1.2s ease-in-out infinite;}' +
+      '.nsx-dot.nsx-ok{animation:none;background:#FFFFFF;opacity:.85;}' +
+      '.nsx-title{display:inline;color:#FFFFFF;font-size:12px;font-weight:700;}' +
+      '.nsx-title .nsx-sub{display:inline;color:#FFFFFF;opacity:.78;font-weight:500;font-size:12px;}' +
+      '.nsx-body{display:block;padding:12px 14px 13px;color:#121722;font-size:14px;line-height:1.6;word-break:keep-all;overflow-wrap:anywhere;}' +
+      '.nsx-num{display:inline;padding:0 5px;border-radius:4px;background:#FFC83D;color:#3A2800;font-weight:700;font-size:13px;}' +
+      '.nsx-foot{display:flex;justify-content:flex-end;padding:0 14px 12px;}' +
+      '.nsx-close{display:inline-block;cursor:pointer;padding:5px 14px;border:1px solid #DDE2EA;border-radius:6px;background:#FFFFFF;color:#121722;font-size:13px;font-weight:600;line-height:1.4;}' +
+      '.nsx-close:hover{background:#F3F5F8;border-color:#5B6475;}' +
+      '.nsx-close:focus-visible{outline:2px solid #2047D6;outline-offset:2px;}' +
+      '@keyframes nsx-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.75)}}' +
+      '@media (prefers-reduced-motion: reduce){.nsx-dot{animation:none;}}';
+    (document.head || document.documentElement).appendChild(st);
+  }
+  function nsxHtml(text) {
+    // 호출부는 <br> 만 쓴다: 나머지는 이스케이프하고, 'N개' 숫자는 노란 강조
+    return String(text).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; })
+      .replace(/&#60;br&#62;/g, '<br>')
+      .replace(/(\d+)개/g, '<span class="nsx-num">$1</span>개');
+  }
   function say(text, done) {
+    nsxStyle();
     if (!box) {
       box = document.createElement('div');
-      box.style.cssText = 'position:fixed;left:16px;bottom:96px;z-index:99999;max-width:340px;padding:12px 14px;border-radius:8px;background:#0e6b57;color:#fff;font:14px/1.5 sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.25)';
+      box.className = 'nsx-card';
+      box.setAttribute('role', 'status');
+      box.setAttribute('aria-live', 'polite');
       document.body.appendChild(box);
     }
-    box.innerHTML = '<b>마이박스 자동 담기</b><br>' + text + (done ? '<br><button style="margin-top:6px;padding:2px 10px;border:0;border-radius:4px;cursor:pointer">닫기</button>' : '');
+    box.innerHTML =
+      '<div class="nsx-head"><span class="nsx-dot' + (done ? ' nsx-ok' : '') + '"></span>' +
+      '<span class="nsx-title">스피드고잡스 PICK ITEM <span class="nsx-sub">· 마이박스 자동 담기</span></span></div>' +
+      '<div class="nsx-body">' + nsxHtml(text) + '</div>' +
+      (done ? '<div class="nsx-foot"><button type="button" class="nsx-close">닫기</button></div>' : '');
     var c = box.querySelector('button');
     if (c) c.onclick = function () { box.remove(); box = null; };
   }
