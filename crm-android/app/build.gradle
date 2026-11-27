@@ -1,0 +1,42 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.sjob.crm'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.sjob.crm'
+        minSdk 29
+        // 34로 고정: 35부터 강제되는 edge-to-edge 레이아웃을 피함 (직접 설치용 앱이라 무관)
+        targetSdk 34
+        versionCode Integer.parseInt(System.getenv('VERSION_CODE') ?: '1')
+        versionName "1.0." + (System.getenv('VERSION_CODE') ?: '1')
+    }
+
+    signingConfigs {
+        // 고정 키로 서명해야 새 버전을 설치할 때 기존 데이터가 유지됨
+        fixed {
+            storeFile file('crm.keystore')
+            storePassword 'android'
+            keyAlias 'crm'
+            keyPassword 'android'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.fixed
+        }
+        debug {
+            signingConfig signingConfigs.fixed
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

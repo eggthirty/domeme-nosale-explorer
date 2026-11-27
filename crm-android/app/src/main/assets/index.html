@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>고객관리</title>
+<style>
+:root {
+  --bg: #f4f6fa; --card: #ffffff; --text: #151a24; --sub: #6b7385; --line: #e3e7ef;
+  --brand: #2f5bea; --brand-weak: #e7edff; --in: #1a9b5b; --out: #2f5bea; --miss: #d93a3a;
+  --chip: #eef1f6; --warn: #b26a00; --warn-weak: #fff3dc;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1218; --card: #181c25; --text: #e9ecf2; --sub: #949bab; --line: #2a303c;
+    --brand: #6f8eff; --brand-weak: #222c4a; --in: #3fc283; --out: #6f8eff; --miss: #ff6b6b;
+    --chip: #232834; --warn: #f0b04a; --warn-weak: #3a2e16;
+  }
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 15px/1.45 system-ui, -apple-system, "Noto Sans KR", sans-serif;
+}
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+input, select, textarea {
+  font: inherit; color: var(--text); background: var(--card);
+  border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; width: 100%;
+}
+textarea { resize: vertical; min-height: 70px; }
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); border-color: transparent; }
+
+header {
+  position: sticky; top: 0; z-index: 5; background: var(--brand); color: #fff;
+  padding: 12px 16px; display: flex; align-items: center; gap: 10px; min-height: 54px;
+}
+header h1 { font-size: 18px; margin: 0; flex: 1; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+header .hbtn { color: #fff; padding: 6px 8px; border-radius: 8px; font-size: 14px; }
+header .hbtn:active { background: rgba(255,255,255,.18); }
+main { padding: 12px 16px 96px; }
+
+nav.tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: flex;
+  background: var(--card); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom);
+}
+nav.tabs button { flex: 1; padding: 9px 0 10px; font-size: 12px; color: var(--sub); display: flex; flex-direction: column; align-items: center; gap: 2px; }
+nav.tabs button svg { width: 22px; height: 22px; }
+nav.tabs button.on { color: var(--brand); font-weight: 600; }
+
+.search { position: relative; margin-bottom: 10px; }
+.search input { padding-left: 38px; border-radius: 12px; }
+.search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--sub); }
+
+.chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 6px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip { flex: none; padding: 6px 12px; border-radius: 999px; background: var(--chip); font-size: 13px; color: var(--sub); }
+.chip.on { background: var(--brand); color: #fff; }
+
+.list { background: var(--card); border-radius: 14px; overflow: hidden; border: 1px solid var(--line); }
+.row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--line); width: 100%; text-align: left; }
+.row:last-child { border-bottom: 0; }
+.row:active { background: var(--chip); }
+.avatar { flex: none; width: 40px; height: 40px; border-radius: 50%; background: var(--brand-weak); color: var(--brand); display: grid; place-items: center; font-weight: 700; }
+.grow { flex: 1; min-width: 0; }
+.title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta { font-size: 13px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.right { flex: none; text-align: right; font-size: 12px; color: var(--sub); }
+.badge { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 6px; background: var(--chip); color: var(--sub); margin-left: 4px; vertical-align: 1px; font-weight: 500; }
+.badge.s-신규 { background: #e3f2ff; color: #1769c2; }
+.badge.s-상담중 { background: #fff1d6; color: #a05e00; }
+.badge.s-계약 { background: #dcf5e7; color: #127a45; }
+.badge.s-보류 { background: #eee; color: #666; }
+.badge.s-종료 { background: #f4e1e1; color: #a23b3b; }
+@media (prefers-color-scheme: dark) {
+  .badge.s-신규 { background: #1c3150; color: #8cc2ff; }
+  .badge.s-상담중 { background: #3f3018; color: #f3c070; }
+  .badge.s-계약 { background: #183a29; color: #79dba7; }
+  .badge.s-보류 { background: #2e2e2e; color: #aaa; }
+  .badge.s-종료 { background: #3d2020; color: #f09a9a; }
+}
+.stale { color: var(--warn); font-weight: 600; }
+
+.fab {
+  position: fixed; right: 18px; bottom: 78px; z-index: 6; width: 56px; height: 56px; border-radius: 18px;
+  background: var(--brand); color: #fff; display: grid; place-items: center; box-shadow: 0 6px 18px rgba(30,60,180,.35);
+}
+.fab svg { width: 26px; height: 26px; }
+
+.empty { text-align: center; color: var(--sub); padding: 48px 16px; }
+.empty b { display: block; color: var(--text); font-size: 16px; margin-bottom: 6px; }
+
+.section-h { font-size: 13px; color: var(--sub); margin: 18px 4px 8px; font-weight: 600; }
+.section-h:first-child { margin-top: 4px; }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+.profile { display: flex; gap: 14px; align-items: center; }
+.profile .avatar { width: 54px; height: 54px; font-size: 22px; }
+.profile .name { font-size: 20px; font-weight: 700; }
+.actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+.actions a, .actions button { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 0; border-radius: 12px; background: var(--brand-weak); color: var(--brand); text-decoration: none; font-size: 13px; font-weight: 600; }
+.actions svg { width: 22px; height: 22px; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; margin-top: 12px; }
+.stats div { background: var(--chip); border-radius: 10px; padding: 8px 4px; }
+.stats b { display: block; font-size: 16px; }
+.stats span { font-size: 12px; color: var(--sub); }
+.kv { font-size: 14px; margin-top: 10px; white-space: pre-wrap; word-break: break-word; }
+.kv .k { color: var(--sub); font-size: 12px; display: block; }
+.tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--chip); margin: 4px 4px 0 0; }
+
+.note-box { display: flex; gap: 8px; align-items: flex-end; }
+.note-box textarea { min-height: 44px; height: 44px; }
+.btn { padding: 11px 16px; border-radius: 10px; background: var(--brand); color: #fff; font-weight: 600; flex: none; }
+.btn.ghost { background: var(--chip); color: var(--text); }
+.btn.danger { background: transparent; color: var(--miss); border: 1px solid var(--miss); }
+.btn.block { width: 100%; }
+.btn:disabled { opacity: .5; }
+
+.tl { position: relative; }
+.tl-item { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.tl-item:last-child { border-bottom: 0; }
+.tl-ic { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--chip); }
+.tl-ic svg { width: 16px; height: 16px; }
+.t-1 { color: var(--in); } .t-2 { color: var(--out); } .t-3, .t-5, .t-6 { color: var(--miss); }
+.tl-note .tl-ic { background: var(--warn-weak); color: var(--warn); }
+.tl-body { flex: 1; min-width: 0; }
+.tl-body .txt { white-space: pre-wrap; word-break: break-word; }
+.tl-body .when { font-size: 12px; color: var(--sub); }
+.tl-del { color: var(--sub); padding: 0 4px; font-size: 18px; line-height: 1; }
+
+.form label { display: block; font-size: 13px; color: var(--sub); margin: 14px 0 6px; }
+.form label:first-child { margin-top: 0; }
+.status-pick { display: flex; flex-wrap: wrap; gap: 6px; }
+.status-pick button { padding: 8px 14px; border-radius: 999px; background: var(--chip); font-size: 14px; }
+.status-pick button.on { background: var(--brand); color: #fff; }
+
+.banner { background: var(--warn-weak); color: var(--warn); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; font-size: 14px; }
+.banner button { color: var(--warn); font-weight: 700; text-decoration: underline; padding: 0; margin-left: 4px; }
+.setting-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.setting-row:last-child { border-bottom: 0; }
+.small { font-size: 12px; color: var(--sub); }
+
+.toast {
+  position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); z-index: 20;
+  background: rgba(20,24,32,.92); color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px;
+  opacity: 0; pointer-events: none; transition: opacity .2s; max-width: calc(100% - 32px);
+}
+.toast.show { opacity: 1; }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <button class="hbtn hidden" id="backBtn" aria-label="뒤로">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+  </button>
+  <h1 id="title">고객관리</h1>
+  <button class="hbtn hidden" id="headAction"></button>
+</header>
+<main id="view"></main>
+<button class="fab" id="fab" aria-label="고객 추가">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+</button>
+<nav class="tabs" id="tabs">
+  <button data-tab="customers" class="on">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3-6 7-6s7 2 7 6"/><path d="M16 4a4 4 0 0 1 0 8M19 15c2 .7 3 2.6 3 6"/></svg>
+    고객
+  </button>
+  <button data-tab="calls">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg>
+    최근통화
+  </button>
+  <button data-tab="settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    설정
+  </button>
+</nav>
+<div class="toast" id="toast"></div>
+<input type="file" id="fileIn" class="hidden">
+
+<script>
+'use strict';
+/* =========================================================
+ * 저장소 (폰 안 localStorage 에만 저장)
+ * ========================================================= */
+const K = { customers: 'crm.customers', calls: 'crm.calls', meta: 'crm.meta' };
+const STATUSES = ['신규', '상담중', '계약', '보류', '종료'];
+const STALE_DAYS = 30;
+
+function load(key, fallback) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+  catch (e) { return fallback; }
+}
+function save(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); }
+  catch (e) { toast('저장 공간이 부족합니다. 백업 후 정리해 주세요.'); }
+}
+
+let customers = load(K.customers, []);
+let calls = load(K.calls, []);          // [{n, t, d, dur, nm}] 최신순
+let meta = load(K.meta, { lastSync: 0 });
+
+function saveCustomers() { save(K.customers, customers); rebuildIndex(); }
+
+/* =========================================================
+ * 전화번호 정규화 & 인덱스
+ * ========================================================= */
+function norm(p) {
+  let d = String(p || '').replace(/\D/g, '');
+  if (d.startsWith('82') && d.length >= 11) d = '0' + d.slice(2);
+  return d;
+}
+function fmtPhone(p) {
+  const d = norm(p);
+  if (/^02\d{7,8}$/.test(d)) return d.replace(/^(02)(\d{3,4})(\d{4})$/, '$1-$2-$3');
+  if (/^0\d{9,10}$/.test(d)) return d.replace(/^(0\d{2})(\d{3,4})(\d{4})$/, '$1-$2-$3');
+  if (/^1\d{7}$/.test(d)) return d.replace(/^(\d{4})(\d{4})$/, '$1-$2');
+  return p || '';
+}
+
+let callIdx = {};   // norm(번호) -> 통화 배열(최신순)
+let custIdx = {};   // norm(번호) -> 고객
+function rebuildIndex() {
+  callIdx = {}; custIdx = {};
+  for (const c of calls) { const k = norm(c.n); (callIdx[k] = callIdx[k] || []).push(c); }
+  for (const c of customers) { const k = norm(c.phone); if (k) custIdx[k] = c; }
+}
+
+function statsOf(cu) {
+  const list = callIdx[norm(cu.phone)] || [];
+  const connected = list.filter(c => (c.t === 1 || c.t === 2) && c.dur > 0);
+  const lastCall = list.length ? list[0].d : 0;
+  const lastNote = (cu.notes || []).reduce((m, n) => Math.max(m, n.ts), 0);
+  return {
+    count: list.length,
+    connected: connected.length,
+    talk: connected.reduce((s, c) => s + c.dur, 0),
+    lastCall,
+    lastContact: Math.max(lastCall, lastNote),
+    calls: list,
+  };
+}
+
+/* =========================================================
+ * 통화기록 동기화
+ * ========================================================= */
+const bridge = window.AndroidBridge || (new URLSearchParams(location.search).has('demo') ? demoBridge() : null);
+
+function hasPerm() { try { return !!bridge && bridge.hasCallLogPermission(); } catch (e) { return false; } }
+
+function syncCalls(silent) {
+  if (!bridge) { if (!silent) toast('통화기록 연동은 안드로이드 앱에서만 됩니다'); return; }
+  if (!hasPerm()) { if (!silent) bridge.requestCallLogPermission(); return; }
+  // 최근 7일은 다시 읽어서 늦게 기록된 항목도 반영
+  const since = meta.lastSync ? meta.lastSync - 7 * 864e5 : 0;
+  let fresh = [];
+  try { fresh = JSON.parse(bridge.getCallLog(String(since))); } catch (e) { fresh = []; }
+  const seen = new Set(calls.map(c => c.d + '_' + norm(c.n)));
+  let added = 0;
+  for (const c of fresh) {
+    const key = c.d + '_' + norm(c.n);
+    if (seen.has(key)) continue;
+    seen.add(key); calls.push(c); added++;
+  }
+  calls.sort((a, b) => b.d - a.d);
+  meta.lastSync = Date.now();
+  save(K.calls, calls); save(K.meta, meta);
+  rebuildIndex();
+  if (!silent) toast(added ? `새 통화 ${added}건을 가져왔어요` : '새 통화가 없어요');
+  render();
+}
+
+window.onAppResume = () => syncCalls(true);
+window.onPermissionResult = ok => {
+  if (ok) syncCalls(false);
+  else { toast('통화기록 권한이 필요합니다'); render(); }
+};
+
+/* =========================================================
+ * 유틸
+ * ========================================================= */
+const $ = s => document.querySelector(s);
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function pad(n) { return String(n).padStart(2, '0'); }
+function dayStart(ts) { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); }
+function fmtDate(ts) {
+  const d = new Date(ts), now = new Date();
+  const t = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const diff = Math.round((dayStart(now) - dayStart(ts)) / 864e5);
+  if (diff === 0) return `오늘 ${t}`;
+  if (diff === 1) return `어제 ${t}`;
+  if (d.getFullYear() === now.getFullYear()) return `${d.getMonth() + 1}/${d.getDate()} ${t}`;
+  return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()} ${t}`;
+}
+function fmtDay(ts) {
+  const d = new Date(ts);
+  const diff = Math.round((dayStart(Date.now()) - dayStart(ts)) / 864e5);
+  const w = '일월화수목금토'[d.getDay()];
+  if (diff === 0) return '오늘';
+  if (diff === 1) return '어제';
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${w})`;
+}
+function ago(ts) {
+  if (!ts) return '연락 기록 없음';
+  const days = Math.floor((dayStart(Date.now()) - dayStart(ts)) / 864e5);
+  if (days <= 0) return '오늘';
+  if (days === 1) return '어제';
+  if (days < 30) return `${days}일 전`;
+  if (days < 365) return `${Math.floor(days / 30)}개월 전`;
+  return `${Math.floor(days / 365)}년 전`;
+}
+function isStale(ts) { return !ts || (Date.now() - ts) > STALE_DAYS * 864e5; }
+function fmtDur(s) {
+  if (!s) return '';
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), ss = s % 60;
+  return h ? `${h}시간 ${m}분` : m ? `${m}분 ${ss}초` : `${ss}초`;
+}
+const TYPE = { 1: '수신', 2: '발신', 3: '부재중', 4: '음성사서함', 5: '거절', 6: '차단', 7: '응답(다른기기)' };
+const ICON = {
+  in: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M17 7L7 17M7 9v8h8"/></svg>',
+  out: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg>',
+  miss: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>',
+  note: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+  phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg>',
+  sms: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>',
+};
+function typeIcon(t) { return t === 1 || t === 7 ? ICON.in : t === 2 ? ICON.out : ICON.miss; }
+function initial(name) { return esc((name || '?').trim().charAt(0) || '?'); }
+
+let toastTimer;
+function toast(msg) {
+  const el = $('#toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+/* =========================================================
+ * 화면 전환 (스택 기반, 안드로이드 뒤로가기 지원)
+ * ========================================================= */
+let tab = 'customers';
+let stack = [];               // [{view:'detail', id}, {view:'edit', id|null, preset}]
+const ui = { q: '', filter: '전체', callFilter: 'all' };
+
+function go(v) { stack.push(v); render(); window.scrollTo(0, 0); }
+function back() { if (!stack.length) return false; stack.pop(); render(); return true; }
+window.onBack = back;
+
+$('#backBtn').onclick = back;
+$('#fab').onclick = () => go({ view: 'edit', id: null });
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
+  tab = b.dataset.tab; stack = []; render(); window.scrollTo(0, 0);
+});
+
+function setHeader(title, { backBtn = false, action = null } = {}) {
+  $('#title').textContent = title;
+  $('#backBtn').classList.toggle('hidden', !backBtn);
+  const a = $('#headAction');
+  if (action) { a.textContent = action.label; a.onclick = action.fn; a.classList.remove('hidden'); }
+  else a.classList.add('hidden');
+}
+
+function render() {
+  const top = stack[stack.length - 1];
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  $('#tabs').classList.toggle('hidden', !!top);
+  $('#fab').classList.toggle('hidden', !!top || tab !== 'customers');
+  if (top?.view === 'detail') return renderDetail(top.id);
+  if (top?.view === 'edit') return renderEdit(top);
+  if (tab === 'customers') return renderCustomers();
+  if (tab === 'calls') return renderCalls();
+  return renderSettings();
+}
+
+function permBanner() {
+  if (!bridge) return '<div class="banner">브라우저 미리보기입니다. 통화기록 연동은 안드로이드 앱에서 동작해요.</div>';
+  if (!hasPerm()) return '<div class="banner">통화기록을 연결하려면 권한이 필요해요.<button data-act="perm">권한 허용</button></div>';
+  return '';
+}
+function bindCommon(root) {
+  root.querySelectorAll('[data-act="perm"]').forEach(b => b.onclick = () => bridge.requestCallLogPermission());
+}
+
+/* ---------------- 고객 목록 ---------------- */
+function renderCustomers() {
+  setHeader('고객관리', { action: { label: '동기화', fn: () => syncCalls(false) } });
+  const v = $('#view');
+  v.innerHTML = `
+    ${permBanner()}
+    <div class="search">${ICON.search}<input id="q" type="search" placeholder="이름, 회사, 번호, 메모 검색" value="${esc(ui.q)}"></div>
+    <div class="chips" id="cchips"></div>
+    <div id="clist"></div>
+  `;
+  bindCommon(v);
+  // 검색창은 다시 그리지 않음 (한글 조합 입력 유지)
+  v.querySelector('#q').oninput = e => { ui.q = e.target.value; renderCustomerList(); };
+  renderCustomerList();
+}
+
+function renderCustomerList() {
+  const staleF = `${STALE_DAYS}일+ 미연락`;
+  const filters = ['전체', staleF, ...STATUSES];
+  const rows = customers.map(c => ({ c, s: statsOf(c) }));
+  const counts = { [staleF]: rows.filter(r => isStale(r.s.lastContact) && r.c.status !== '종료').length };
+  for (const r of rows) counts[r.c.status] = (counts[r.c.status] || 0) + 1;
+
+  const q = ui.q.trim().toLowerCase(), qd = norm(q);
+  const list = rows.filter(({ c, s }) => {
+    if (ui.filter === staleF && !(isStale(s.lastContact) && c.status !== '종료')) return false;
+    if (STATUSES.includes(ui.filter) && c.status !== ui.filter) return false;
+    if (!q) return true;
+    return [c.name, c.company, c.memo, (c.tags || []).join(' ')].join(' ').toLowerCase().includes(q)
+      || (qd.length >= 3 && norm(c.phone).includes(qd));
+  });
+  list.sort((a, b) => (b.s.lastContact || b.c.createdAt) - (a.s.lastContact || a.c.createdAt));
+
+  const chips = $('#cchips');
+  chips.innerHTML = filters.map(f => `<button class="chip ${ui.filter === f ? 'on' : ''}" data-f="${esc(f)}">${esc(f)}${counts[f] ? ' ' + counts[f] : ''}</button>`).join('');
+  chips.querySelectorAll('.chip').forEach(b => b.onclick = () => { ui.filter = b.dataset.f; renderCustomerList(); });
+
+  const el = $('#clist');
+  el.innerHTML = customers.length === 0
+    ? `<div class="empty"><b>아직 등록된 고객이 없어요</b>오른쪽 아래 + 버튼으로 추가하거나<br>‘최근통화’ 탭에서 번호를 바로 등록하세요.</div>`
+    : list.length === 0 ? `<div class="empty">조건에 맞는 고객이 없어요</div>`
+    : `<div class="list">${list.map(({ c, s }) => `
+        <button class="row" data-id="${c.id}">
+          <div class="avatar">${initial(c.name)}</div>
+          <div class="grow">
+            <div class="title">${esc(c.name)}<span class="badge s-${esc(c.status)}">${esc(c.status)}</span></div>
+            <div class="meta">${esc([c.company, fmtPhone(c.phone)].filter(Boolean).join(' · ')) || '&nbsp;'}</div>
+          </div>
+          <div class="right">
+            <div class="${isStale(s.lastContact) && c.status !== '종료' ? 'stale' : ''}">${ago(s.lastContact)}</div>
+            <div>${s.count ? `통화 ${s.count}` : ''}</div>
+          </div>
+        </button>`).join('')}</div>`;
+  el.querySelectorAll('.row').forEach(b => b.onclick = () => go({ view: 'detail', id: b.dataset.id }));
+}
+
+/* ---------------- 고객 상세 ---------------- */
+function renderDetail(id) {
+  const c = customers.find(x => x.id === id);
+  if (!c) { stack.pop(); return render(); }
+  const s = statsOf(c);
+  setHeader(c.name, { backBtn: true, action: { label: '편집', fn: () => go({ view: 'edit', id }) } });
+
+  const items = [
+    ...s.calls.map(x => ({ ts: x.d, kind: 'call', x })),
+    ...(c.notes || []).map(n => ({ ts: n.ts, kind: 'note', n })),
+  ].sort((a, b) => b.ts - a.ts);
+
+  const tel = norm(c.phone);
+  const v = $('#view');
+  v.innerHTML = `
+    <div class="card">
+      <div class="profile">
+        <div class="avatar">${initial(c.name)}</div>
+        <div class="grow">
+          <div class="name">${esc(c.name)} <span class="badge s-${esc(c.status)}">${esc(c.status)}</span></div>
+          <div class="meta">${esc([c.company, fmtPhone(c.phone)].filter(Boolean).join(' · '))}</div>
+        </div>
+      </div>
+      <div class="actions">
+        <a href="tel:${esc(tel)}">${ICON.phone}전화</a>
+        <a href="sms:${esc(tel)}">${ICON.sms}문자</a>
+        <button data-act="focusnote">${ICON.note}메모</button>
+      </div>
+      <div class="stats">
+        <div><b>${s.count}</b><span>전체 통화</span></div>
+        <div><b>${fmtDur(s.talk) || '0초'}</b><span>총 통화시간</span></div>
+        <div><b class="${isStale(s.lastContact) && c.status !== '종료' ? 'stale' : ''}">${ago(s.lastContact)}</b><span>마지막 연락</span></div>
+      </div>
+      ${c.tags?.length ? `<div style="margin-top:10px">${c.tags.map(t => `<span class="tag">#${esc(t)}</span>`).join('')}</div>` : ''}
+      ${c.memo ? `<div class="kv"><span class="k">메모</span>${esc(c.memo)}</div>` : ''}
+    </div>
+
+    <div class="card">
+      <div class="note-box">
+        <textarea id="note" placeholder="통화 내용 · 할 일 기록"></textarea>
+        <button class="btn" id="addNote">기록</button>
+      </div>
+    </div>
+
+    <div class="section-h">활동 기록 ${items.length ? `(${items.length})` : ''}</div>
+    <div class="card" style="padding-top:4px;padding-bottom:4px">
+      ${items.length ? `<div class="tl">${items.map(it => it.kind === 'call' ? `
+        <div class="tl-item">
+          <div class="tl-ic t-${it.x.t}">${typeIcon(it.x.t)}</div>
+          <div class="tl-body">
+            <div class="txt">${TYPE[it.x.t] || '통화'}${it.x.dur ? ` · ${fmtDur(it.x.dur)}` : ''}</div>
+            <div class="when">${fmtDate(it.x.d)}</div>
+          </div>
+        </div>` : `
+        <div class="tl-item tl-note">
+          <div class="tl-ic">${ICON.note}</div>
+          <div class="tl-body">
+            <div class="txt">${esc(it.n.text)}</div>
+            <div class="when">${fmtDate(it.n.ts)}</div>
+          </div>
+          <button class="tl-del" data-del="${it.n.id}" aria-label="메모 삭제">×</button>
+        </div>`).join('')}</div>`
+        : `<div class="empty" style="padding:24px 0">아직 통화나 메모가 없어요</div>`}
+    </div>
+  `;
+  const note = v.querySelector('#note');
+  v.querySelector('[data-act="focusnote"]').onclick = () => note.focus();
+  v.querySelector('#addNote').onclick = () => {
+    const text = note.value.trim();
+    if (!text) return note.focus();
+    (c.notes = c.notes || []).push({ id: uid(), ts: Date.now(), text });
+    saveCustomers(); renderDetail(id); toast('기록했어요');
+  };
+  v.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    if (!confirm('이 메모를 삭제할까요?')) return;
+    c.notes = c.notes.filter(n => n.id !== b.dataset.del);
+    saveCustomers(); renderDetail(id);
+  });
+}
+
+/* ---------------- 고객 추가/편집 ---------------- */
+function renderEdit(st) {
+  const existing = st.id ? customers.find(x => x.id === st.id) : null;
+  const c = existing || { name: '', phone: '', company: '', status: '신규', tags: [], memo: '', ...(st.preset || {}) };
+  setHeader(existing ? '고객 편집' : '고객 추가', { backBtn: true });
+  let status = c.status;
+  const v = $('#view');
+  v.innerHTML = `
+    <div class="card form">
+      <label>이름 *</label><input id="f-name" value="${esc(c.name)}" placeholder="홍길동" autocomplete="off">
+      <label>전화번호 *</label><input id="f-phone" type="tel" value="${esc(fmtPhone(c.phone))}" placeholder="010-1234-5678">
+      <label>회사 / 소속</label><input id="f-company" value="${esc(c.company)}" placeholder="선택 입력">
+      <label>상태</label>
+      <div class="status-pick">${STATUSES.map(x => `<button data-s="${x}" class="${x === status ? 'on' : ''}">${x}</button>`).join('')}</div>
+      <label>태그 (쉼표로 구분)</label><input id="f-tags" value="${esc((c.tags || []).join(', '))}" placeholder="VIP, 도매, 재주문">
+      <label>메모</label><textarea id="f-memo" placeholder="고객 특징, 주소, 주의사항 등">${esc(c.memo)}</textarea>
+    </div>
+    <button class="btn block" id="saveBtn">저장</button>
+    ${existing ? '<div style="height:10px"></div><button class="btn danger block" id="delBtn">고객 삭제</button>' : ''}
+  `;
+  v.querySelectorAll('.status-pick button').forEach(b => b.onclick = () => {
+    status = b.dataset.s;
+    v.querySelectorAll('.status-pick button').forEach(x => x.classList.toggle('on', x === b));
+  });
+  if (!existing) setTimeout(() => $(c.name ? '#f-company' : '#f-name')?.focus(), 50);
+
+  v.querySelector('#saveBtn').onclick = () => {
+    const name = $('#f-name').value.trim();
+    const phone = norm($('#f-phone').value);
+    if (!name) { toast('이름을 입력해 주세요'); return $('#f-name').focus(); }
+    if (phone.length < 7) { toast('전화번호를 확인해 주세요'); return $('#f-phone').focus(); }
+    const dup = custIdx[phone];
+    if (dup && dup !== existing) { toast(`이미 등록된 번호예요 (${dup.name})`); return; }
+    const data = {
+      name, phone, status,
+      company: $('#f-company').value.trim(),
+      tags: $('#f-tags').value.split(',').map(t => t.trim().replace(/^#/, '')).filter(Boolean),
+      memo: $('#f-memo').value.trim(),
+    };
+    if (existing) {
+      Object.assign(existing, data);
+      saveCustomers(); stack.pop();
+    } else {
+      const nc = { id: uid(), createdAt: Date.now(), notes: [], ...data };
+      customers.push(nc);
+      saveCustomers(); stack.pop();
+      stack.push({ view: 'detail', id: nc.id });
+    }
+    toast('저장했어요'); render();
+  };
+  const del = v.querySelector('#delBtn');
+  if (del) del.onclick = () => {
+    if (!confirm(`${existing.name} 고객을 삭제할까요?\n메모도 함께 삭제됩니다. (통화기록은 유지)`)) return;
+    customers = customers.filter(x => x !== existing);
+    saveCustomers(); stack = []; toast('삭제했어요'); render();
+  };
+}
+
+/* ---------------- 최근 통화 ---------------- */
+function renderCalls() {
+  setHeader('최근통화', { action: { label: '동기화', fn: () => syncCalls(false) } });
+  const f = ui.callFilter;
+  let list = calls.filter(c => {
+    const known = !!custIdx[norm(c.n)];
+    if (f === 'unknown') return !known && norm(c.n);
+    if (f === 'known') return known;
+    if (f === 'missed') return c.t === 3 || c.t === 5;
+    return true;
+  }).slice(0, 300);
+
+  let html = '', lastDay = null;
+  for (const c of list) {
+    const day = dayStart(c.d);
+    if (day !== lastDay) {
+      if (lastDay !== null) html += '</div>';
+      html += `<div class="section-h">${fmtDay(c.d)}</div><div class="list">`;
+      lastDay = day;
+    }
+    const k = norm(c.n), cu = custIdx[k];
+    const label = cu ? cu.name : c.nm || fmtPhone(c.n) || '발신번호 없음';
+    html += `
+      <div class="row" ${cu ? `data-id="${cu.id}" role="button"` : ''}>
+        <div class="tl-ic t-${c.t}">${typeIcon(c.t)}</div>
+        <div class="grow">
+          <div class="title">${esc(label)}${cu ? `<span class="badge s-${esc(cu.status)}">${esc(cu.status)}</span>` : ''}</div>
+          <div class="meta">${TYPE[c.t] || '통화'}${c.dur ? ' · ' + fmtDur(c.dur) : ''}${cu || !c.nm ? '' : ' · ' + esc(fmtPhone(c.n))} · ${fmtDate(c.d).replace(/^(오늘|어제) /, '')}</div>
+        </div>
+        ${cu ? '' : k ? `<button class="btn ghost" style="padding:7px 12px;font-size:13px" data-add="${esc(k)}" data-nm="${esc(c.nm || '')}">+ 등록</button>` : ''}
+      </div>`;
+  }
+  if (lastDay !== null) html += '</div>';
+
+  const chips = [['all', '전체'], ['unknown', '미등록 번호'], ['known', '고객'], ['missed', '부재중']];
+  const v = $('#view');
+  v.innerHTML = `
+    ${permBanner()}
+    <div class="chips">${chips.map(([k, l]) => `<button class="chip ${f === k ? 'on' : ''}" data-cf="${k}">${l}</button>`).join('')}</div>
+    ${list.length ? html : `<div class="empty"><b>표시할 통화가 없어요</b>${bridge && hasPerm() ? '위의 ‘동기화’를 눌러 최신 기록을 불러오세요.' : ''}</div>`}
+    ${meta.lastSync ? `<p class="small" style="text-align:center;margin-top:14px">마지막 동기화 ${fmtDate(meta.lastSync)}</p>` : ''}
+  `;
+  bindCommon(v);
+  v.querySelectorAll('[data-cf]').forEach(b => b.onclick = () => { ui.callFilter = b.dataset.cf; renderCalls(); });
+  v.querySelectorAll('.row[data-id]').forEach(r => r.onclick = () => go({ view: 'detail', id: r.dataset.id }));
+  v.querySelectorAll('[data-add]').forEach(b => b.onclick = e => {
+    e.stopPropagation();
+    go({ view: 'edit', id: null, preset: { phone: b.dataset.add, name: b.dataset.nm } });
+  });
+}
+
+/* ---------------- 설정 ---------------- */
+function renderSettings() {
+  setHeader('설정');
+  const perm = hasPerm();
+  const v = $('#view');
+  v.innerHTML = `
+    <div class="section-h">통화기록 연동</div>
+    <div class="card">
+      <div class="setting-row">
+        <div><div>통화기록 권한</div><div class="small">${!bridge ? '안드로이드 앱에서만 사용 가능' : perm ? '허용됨 — 앱을 열 때마다 자동 동기화' : '허용 안 됨'}</div></div>
+        ${bridge && !perm ? '<button class="btn" data-act="perm">허용</button>' : ''}
+      </div>
+      <div class="setting-row">
+        <div><div>저장된 통화기록</div><div class="small">${calls.length.toLocaleString()}건${meta.lastSync ? ' · 마지막 ' + fmtDate(meta.lastSync) : ''}</div></div>
+        <button class="btn ghost" id="syncBtn">지금 동기화</button>
+      </div>
+      ${bridge && !perm ? '<p class="small">권한 창이 다시 뜨지 않으면 <button style="color:var(--brand);text-decoration:underline;padding:0" id="appSet">앱 설정</button> → 권한 → 통화 기록에서 허용해 주세요.</p>' : ''}
+    </div>
+
+    <div class="section-h">백업</div>
+    <div class="card">
+      <p class="small" style="margin-top:0">데이터는 이 폰 안에만 저장돼요. 앱을 삭제하거나 폰을 바꾸기 전에 꼭 백업하세요.</p>
+      <div class="setting-row">
+        <div><div>백업 내보내기</div><div class="small">다운로드 폴더에 저장</div></div>
+        <button class="btn" id="expBtn">내보내기</button>
+      </div>
+      <div class="setting-row">
+        <div><div>백업 가져오기</div><div class="small">현재 데이터를 백업 파일로 교체</div></div>
+        <button class="btn ghost" id="impBtn">가져오기</button>
+      </div>
+    </div>
+
+    <div class="section-h">정보</div>
+    <div class="card small">
+      고객 ${customers.length}명 · 메모 ${customers.reduce((s, c) => s + (c.notes?.length || 0), 0)}건<br>
+      통화기록과 고객 정보는 외부 서버로 전송되지 않습니다.
+    </div>
+  `;
+  bindCommon(v);
+  v.querySelector('#syncBtn').onclick = () => syncCalls(false);
+  const as = v.querySelector('#appSet'); if (as) as.onclick = () => bridge.openAppSettings();
+  v.querySelector('#expBtn').onclick = exportBackup;
+  v.querySelector('#impBtn').onclick = () => $('#fileIn').click();
+}
+
+/* =========================================================
+ * 백업
+ * ========================================================= */
+function exportBackup() {
+  const d = new Date();
+  const name = `고객관리_백업_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}.json`;
+  const data = JSON.stringify({ app: 'callcrm', version: 1, exportedAt: Date.now(), customers, calls, meta });
+  if (window.AndroidBridge) {
+    toast(window.AndroidBridge.saveFile(name, data) ? '다운로드 폴더에 저장했어요' : '저장에 실패했어요');
+  } else {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+    a.download = name; a.click(); URL.revokeObjectURL(a.href);
+  }
+}
+$('#fileIn').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  try {
+    const d = JSON.parse(await f.text());
+    if (d.app !== 'callcrm' || !Array.isArray(d.customers)) throw new Error('형식 오류');
+    if (!confirm(`백업 파일: 고객 ${d.customers.length}명, 통화 ${(d.calls || []).length}건\n현재 데이터를 이 백업으로 바꿀까요?`)) return;
+    customers = d.customers; calls = d.calls || []; meta = d.meta || { lastSync: 0 };
+    save(K.customers, customers); save(K.calls, calls); save(K.meta, meta);
+    rebuildIndex(); toast('백업을 불러왔어요'); render();
+  } catch (err) { toast('올바른 백업 파일이 아니에요'); }
+};
+
+/* =========================================================
+ * 브라우저 미리보기용 가짜 통화기록 (?demo)
+ * ========================================================= */
+function demoBridge() {
+  const now = Date.now(), H = 36e5;
+  const sample = [
+    ['01012345678', 2, 0.5, 185, '김민수'], ['01098765432', 1, 3, 62], ['0212345678', 3, 5, 0],
+    ['01012345678', 1, 26, 340, '김민수'], ['01055554444', 2, 30, 45, '박지영'], ['01033332222', 3, 50, 0],
+    ['01055554444', 1, 75, 610, '박지영'], ['01098765432', 2, 100, 20], ['01077778888', 1, 200, 95, '이도윤'],
+    ['01012345678', 2, 400, 128, '김민수'], ['01077778888', 3, 900, 0, '이도윤'],
+  ];
+  let granted = false;
+  return {
+    hasCallLogPermission: () => granted,
+    requestCallLogPermission: () => { granted = true; setTimeout(() => window.onPermissionResult(true), 100); },
+    getCallLog: since => JSON.stringify(sample.map(([n, t, h, dur, nm]) => ({ n, t, d: Math.round(now - h * H), dur, nm })).filter(c => c.d > +since)),
+    toast, openAppSettings() {},
+  };
+}
+
+rebuildIndex();
+render();
+syncCalls(true);
+</script>
+</body>
+</html>

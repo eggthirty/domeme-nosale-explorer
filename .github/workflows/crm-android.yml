@@ -1,0 +1,51 @@
+name: 고객관리 앱 빌드
+
+on:
+  push:
+    paths:
+      - 'crm-android/**'
+      - '.github/workflows/crm-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+
+      - name: APK 빌드
+        working-directory: crm-android
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+        run: gradle --no-daemon assembleRelease
+
+      - name: APK 이름 정리
+        run: cp crm-android/app/build/outputs/apk/release/app-release.apk 고객관리.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crm-apk
+          path: 고객관리.apk
+
+      - name: 다운로드 페이지(릴리스) 갱신
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete crm-latest --yes --cleanup-tag || true
+          gh release create crm-latest 고객관리.apk \
+            --target "$GITHUB_SHA" \
+            --title "고객관리 앱 (빌드 #${{ github.run_number }})" \
+            --notes "폰에서 아래 '고객관리.apk'를 눌러 설치하세요. 새 버전은 그대로 덮어 설치하면 데이터가 유지됩니다." \
+            --prerelease
