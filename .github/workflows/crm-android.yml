@@ -32,20 +32,20 @@ jobs:
         run: gradle --no-daemon assembleRelease
 
       - name: APK 이름 정리
-        run: cp crm-android/app/build/outputs/apk/release/app-release.apk 고객관리.apk
+        run: cp crm-android/app/build/outputs/apk/release/app-release.apk CallCRM.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: crm-apk
-          path: 고객관리.apk
+          path: CallCRM.apk
 
       - name: 다운로드 페이지(릴리스) 갱신
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete crm-latest --yes --cleanup-tag || true
-          gh release create crm-latest 고객관리.apk \
+          gh release create crm-latest CallCRM.apk \
             --target "$GITHUB_SHA" \
             --title "고객관리 앱 (빌드 #${{ github.run_number }})" \
-            --notes "폰에서 아래 '고객관리.apk'를 눌러 설치하세요. 새 버전은 그대로 덮어 설치하면 데이터가 유지됩니다." \
+            --notes "폰에서 아래 'CallCRM.apk'를 눌러 설치하세요. 새 버전은 그대로 덮어 설치하면 데이터가 유지됩니다." \
             --prerelease
