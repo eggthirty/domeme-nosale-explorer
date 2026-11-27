@@ -181,9 +181,20 @@ nav.tabs button.on { color: var(--brand); font-weight: 600; }
 <script>
 'use strict';
 /* =========================================================
- * 저장소 (폰 안 localStorage 에만 저장)
+ * 설정값
  * ========================================================= */
-const K = { customers: 'crm.customers', calls: 'crm.calls', meta: 'crm.meta' };
+const DRIVE = {
+  // PC(웹)에서 구글 로그인할 때 쓰는 'OAuth 웹 클라이언트 ID'. 비밀값이 아님.
+  // 폰 앱은 패키지명 + 서명키(SHA-1)로 인증하므로 이 값이 필요 없음.
+  webClientId: '',
+  fileName: '고객관리_데이터.json',
+  scope: 'https://www.googleapis.com/auth/drive.file',
+};
+
+/* =========================================================
+ * 저장소 (기기 안 localStorage + 구글 드라이브 동기화)
+ * ========================================================= */
+const K = { customers: 'crm.customers', calls: 'crm.calls', meta: 'crm.meta', deleted: 'crm.deleted', drive: 'crm.drive' };
 const STATUSES = ['신규', '상담중', '계약', '보류', '종료'];
 const STALE_DAYS = 30;
 
@@ -199,8 +210,11 @@ function save(key, val) {
 let customers = load(K.customers, []);
 let calls = load(K.calls, []);          // [{n, t, d, dur, nm}] 최신순
 let meta = load(K.meta, { lastSync: 0 });
+let deleted = load(K.deleted, {});      // 삭제한 고객/메모 id -> 삭제 시각 (동기화 시 되살아나지 않게)
+let drive = load(K.drive, { connected: false, fileId: null, lastSync: 0, dirty: false, error: '' });
 
-function saveCustomers() { save(K.customers, customers); rebuildIndex(); }
+function saveCustomers() { save(K.customers, customers); rebuildIndex(); markDirty(); }
+function markDeleted(id) { deleted[id] = Date.now(); save(K.deleted, deleted); }
 
 /* =========================================================
  * 전화번호 정규화 & 인덱스
@@ -266,11 +280,19 @@ function syncCalls(silent) {
   meta.lastSync = Date.now();
   save(K.calls, calls); save(K.meta, meta);
   rebuildIndex();
+  if (added) markDirty();
   if (!silent) toast(added ? `새 통화 ${added}건을 가져왔어요` : '새 통화가 없어요');
-  render();
+  safeRender();
 }
 
-window.onAppResume = () => syncCalls(true);
+/** 헤더의 '동기화' 버튼: 통화기록 → 드라이브 순서로 */
+function syncAll() {
+  if (bridge && hasPerm()) syncCalls(false);
+  else if (bridge) bridge.requestCallLogPermission();
+  if (drive.connected || !bridge) driveSync(true);
+}
+
+window.onAppResume = () => { syncCalls(true); if (drive.connected) driveSync(false); };
 window.onPermissionResult = ok => {
   if (ok) syncCalls(false);
   else { toast('통화기록 권한이 필요합니다'); render(); }
@@ -357,6 +379,7 @@ function setHeader(title, { backBtn = false, action = null } = {}) {
   $('#title').textContent = title;
   $('#backBtn').classList.toggle('hidden', !backBtn);
   const a = $('#headAction');
+  a.dataset.sync = action?.sync ? '1' : '';
   if (action) { a.textContent = action.label; a.onclick = action.fn; a.classList.remove('hidden'); }
   else a.classList.add('hidden');
 }
@@ -374,17 +397,21 @@ function render() {
 }
 
 function permBanner() {
-  if (!bridge) return '<div class="banner">브라우저 미리보기입니다. 통화기록 연동은 안드로이드 앱에서 동작해요.</div>';
-  if (!hasPerm()) return '<div class="banner">통화기록을 연결하려면 권한이 필요해요.<button data-act="perm">권한 허용</button></div>';
-  return '';
+  let h = '';
+  if (bridge && !hasPerm()) h += '<div class="banner">통화기록을 연결하려면 권한이 필요해요.<button data-act="perm">권한 허용</button></div>';
+  if (!isApp && !drive.connected) h += '<div class="banner">PC 화면입니다. 폰 앱과 같은 구글 계정으로 연결하면 데이터가 보여요.<button data-act="drive">구글 드라이브 연결</button></div>';
+  else if (!isApp && !driveToken.value) h += '<div class="banner">최신 데이터를 불러오려면 눌러 주세요.<button data-act="drive">지금 동기화</button></div>';
+  else if (drive.error === 'login') h += '<div class="banner">구글 드라이브 연결이 끊겼어요.<button data-act="drive">다시 연결</button></div>';
+  return h;
 }
 function bindCommon(root) {
   root.querySelectorAll('[data-act="perm"]').forEach(b => b.onclick = () => bridge.requestCallLogPermission());
+  root.querySelectorAll('[data-act="drive"]').forEach(b => b.onclick = () => driveSync(true));
 }
 
 /* ---------------- 고객 목록 ---------------- */
 function renderCustomers() {
-  setHeader('고객관리', { action: { label: '동기화', fn: () => syncCalls(false) } });
+  setHeader('고객관리', { action: { label: syncLabel(), fn: syncAll, sync: true } });
   const v = $('#view');
   v.innerHTML = `
     ${permBanner()}
@@ -513,6 +540,7 @@ function renderDetail(id) {
   };
   v.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
     if (!confirm('이 메모를 삭제할까요?')) return;
+    markDeleted(b.dataset.del);
     c.notes = c.notes.filter(n => n.id !== b.dataset.del);
     saveCustomers(); renderDetail(id);
   });
@@ -556,6 +584,7 @@ function renderEdit(st) {
       company: $('#f-company').value.trim(),
       tags: $('#f-tags').value.split(',').map(t => t.trim().replace(/^#/, '')).filter(Boolean),
       memo: $('#f-memo').value.trim(),
+      updatedAt: Date.now(),
     };
     if (existing) {
       Object.assign(existing, data);
@@ -571,6 +600,7 @@ function renderEdit(st) {
   const del = v.querySelector('#delBtn');
   if (del) del.onclick = () => {
     if (!confirm(`${existing.name} 고객을 삭제할까요?\n메모도 함께 삭제됩니다. (통화기록은 유지)`)) return;
+    markDeleted(existing.id);
     customers = customers.filter(x => x !== existing);
     saveCustomers(); stack = []; toast('삭제했어요'); render();
   };
@@ -578,7 +608,7 @@ function renderEdit(st) {
 
 /* ---------------- 최근 통화 ---------------- */
 function renderCalls() {
-  setHeader('최근통화', { action: { label: '동기화', fn: () => syncCalls(false) } });
+  setHeader('최근통화', { action: { label: syncLabel(), fn: syncAll, sync: true } });
   const f = ui.callFilter;
   let list = calls.filter(c => {
     const known = !!custIdx[norm(c.n)];
@@ -636,19 +666,24 @@ function renderSettings() {
     <div class="section-h">통화기록 연동</div>
     <div class="card">
       <div class="setting-row">
-        <div><div>통화기록 권한</div><div class="small">${!bridge ? '안드로이드 앱에서만 사용 가능' : perm ? '허용됨 — 앱을 열 때마다 자동 동기화' : '허용 안 됨'}</div></div>
+        <div><div>통화기록 권한</div><div class="small">${!bridge ? '폰 앱에서 가져온 통화기록이 동기화되어 보여요' : perm ? '허용됨 — 앱을 열 때마다 자동 동기화' : '허용 안 됨'}</div></div>
         ${bridge && !perm ? '<button class="btn" data-act="perm">허용</button>' : ''}
       </div>
       <div class="setting-row">
         <div><div>저장된 통화기록</div><div class="small">${calls.length.toLocaleString()}건${meta.lastSync ? ' · 마지막 ' + fmtDate(meta.lastSync) : ''}</div></div>
-        <button class="btn ghost" id="syncBtn">지금 동기화</button>
+        ${bridge ? '<button class="btn ghost" id="syncBtn">통화 불러오기</button>' : '<span id="syncBtn"></span>'}
       </div>
       ${bridge && !perm ? '<p class="small">권한 창이 다시 뜨지 않으면 <button style="color:var(--brand);text-decoration:underline;padding:0" id="appSet">앱 설정</button> → 권한 → 통화 기록에서 허용해 주세요.</p>' : ''}
     </div>
 
+    <div class="section-h">구글 드라이브 동기화</div>
+    <div class="card">
+      ${driveSettingsHtml()}
+    </div>
+
     <div class="section-h">백업</div>
     <div class="card">
-      <p class="small" style="margin-top:0">데이터는 이 폰 안에만 저장돼요. 앱을 삭제하거나 폰을 바꾸기 전에 꼭 백업하세요.</p>
+      <p class="small" style="margin-top:0">구글 드라이브 동기화와 별개로, 파일로 따로 보관하고 싶을 때 사용하세요.</p>
       <div class="setting-row">
         <div><div>백업 내보내기</div><div class="small">다운로드 폴더에 저장</div></div>
         <button class="btn" id="expBtn">내보내기</button>
@@ -662,11 +697,12 @@ function renderSettings() {
     <div class="section-h">정보</div>
     <div class="card small">
       고객 ${customers.length}명 · 메모 ${customers.reduce((s, c) => s + (c.notes?.length || 0), 0)}건<br>
-      통화기록과 고객 정보는 외부 서버로 전송되지 않습니다.
+      데이터는 이 기기와 본인 구글 드라이브에만 저장되며, 그 밖의 서버로는 전송되지 않습니다.
     </div>
   `;
   bindCommon(v);
   v.querySelector('#syncBtn').onclick = () => syncCalls(false);
+  bindDriveSettings(v);
   const as = v.querySelector('#appSet'); if (as) as.onclick = () => bridge.openAppSettings();
   v.querySelector('#expBtn').onclick = exportBackup;
   v.querySelector('#impBtn').onclick = () => $('#fileIn').click();
@@ -678,7 +714,7 @@ function renderSettings() {
 function exportBackup() {
   const d = new Date();
   const name = `고객관리_백업_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}.json`;
-  const data = JSON.stringify({ app: 'callcrm', version: 1, exportedAt: Date.now(), customers, calls, meta });
+  const data = JSON.stringify({ app: 'callcrm', version: 2, exportedAt: Date.now(), customers, calls, deleted, meta });
   if (window.AndroidBridge) {
     toast(window.AndroidBridge.saveFile(name, data) ? '다운로드 폴더에 저장했어요' : '저장에 실패했어요');
   } else {
@@ -695,10 +731,243 @@ $('#fileIn').onchange = async e => {
     if (d.app !== 'callcrm' || !Array.isArray(d.customers)) throw new Error('형식 오류');
     if (!confirm(`백업 파일: 고객 ${d.customers.length}명, 통화 ${(d.calls || []).length}건\n현재 데이터를 이 백업으로 바꿀까요?`)) return;
     customers = d.customers; calls = d.calls || []; meta = d.meta || { lastSync: 0 };
-    save(K.customers, customers); save(K.calls, calls); save(K.meta, meta);
-    rebuildIndex(); toast('백업을 불러왔어요'); render();
+    deleted = { ...deleted, ...(d.deleted || {}) };
+    save(K.customers, customers); save(K.calls, calls); save(K.meta, meta); save(K.deleted, deleted);
+    rebuildIndex(); markDirty(); toast('백업을 불러왔어요'); render();
   } catch (err) { toast('올바른 백업 파일이 아니에요'); }
 };
+
+/* =========================================================
+ * 구글 드라이브 동기화
+ *  - 본인 드라이브의 '고객관리_데이터.json' 한 파일에 저장
+ *  - 동기화 = 드라이브 파일 내려받기 → 이 기기 데이터와 합치기 → 올리기
+ *  - 폰 앱: 네이티브 구글 로그인(AndroidBridge.driveAuthorize) + 네이티브 HTTP
+ *  - PC 웹: Google Identity Services 토큰 + fetch
+ * ========================================================= */
+const isApp = !!window.AndroidBridge;
+const driveToken = { value: null, exp: 0 };
+let gisClient = null, syncing = false, syncAgain = false, syncTimer = null;
+
+function saveDrive() { save(K.drive, drive); }
+function markDirty() { drive.dirty = true; saveDrive(); scheduleDriveSync(); }
+function scheduleDriveSync() {
+  if (!drive.connected) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => driveSync(false), 2500);
+}
+function syncLabel() {
+  if (syncing) return '동기화 중…';
+  if (drive.connected && drive.error) return '⚠ 동기화';
+  return '동기화';
+}
+function updateSyncUi() {
+  const a = $('#headAction');
+  if (a.dataset.sync) a.textContent = syncLabel();
+  const st = $('#driveStatus');
+  if (st) st.innerHTML = driveStatusText();
+}
+/** 입력 중일 때는 화면을 다시 그리지 않음 (작성 중인 내용 보호) */
+function safeRender() {
+  const top = stack[stack.length - 1];
+  const ae = document.activeElement;
+  if (top?.view === 'edit' || (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))) { updateSyncUi(); return; }
+  render();
+}
+
+/* ---- 토큰 ---- */
+let tokenWaiters = null;
+window.__driveToken = (tok, err) => {
+  const w = tokenWaiters; tokenWaiters = null;
+  if (tok) { driveToken.value = tok; driveToken.exp = Date.now() + 50 * 60e3; }
+  if (w) w.forEach(f => f(tok || null, err));
+};
+function getToken(interactive) {
+  if (driveToken.value && Date.now() < driveToken.exp) return Promise.resolve(driveToken.value);
+  driveToken.value = null;
+  if (isApp) {
+    return new Promise(res => {
+      const first = !tokenWaiters;
+      (tokenWaiters = tokenWaiters || []).push(tok => res(tok));
+      if (first) window.AndroidBridge.driveAuthorize(!!interactive);
+    });
+  }
+  // PC 웹: 팝업은 사용자가 버튼을 눌렀을 때만 가능
+  if (!interactive) return Promise.resolve(null);
+  if (!DRIVE.webClientId) return Promise.reject(new Error('웹 클라이언트 ID가 설정되지 않았어요'));
+  if (!window.google?.accounts?.oauth2) return Promise.reject(new Error('구글 로그인 모듈을 불러오는 중이에요. 잠시 후 다시 눌러 주세요'));
+  return new Promise((res, rej) => {
+    gisClient = gisClient || google.accounts.oauth2.initTokenClient({ client_id: DRIVE.webClientId, scope: DRIVE.scope, callback: () => {} });
+    gisClient.callback = r => {
+      if (r.error) return rej(new Error(r.error));
+      driveToken.value = r.access_token;
+      driveToken.exp = Date.now() + (Number(r.expires_in || 3600) - 300) * 1000;
+      res(r.access_token);
+    };
+    gisClient.error_callback = e => rej(new Error(e?.type === 'popup_closed' ? '로그인 창이 닫혔어요' : (e?.type || '로그인 실패')));
+    gisClient.requestAccessToken({ prompt: drive.connected ? '' : 'consent' });
+  });
+}
+if (!isApp) {
+  const sc = document.createElement('script');
+  sc.src = 'https://accounts.google.com/gsi/client'; sc.async = true;
+  document.head.appendChild(sc);
+}
+
+/* ---- HTTP ---- */
+const httpWaiters = {};
+window.__httpDone = (id, status, text) => { const f = httpWaiters[id]; delete httpWaiters[id]; if (f) f({ status, text }); };
+function http(method, url, token, contentType, body) {
+  if (isApp) {
+    return new Promise(res => {
+      const id = uid(); httpWaiters[id] = res;
+      window.AndroidBridge.http(id, method, url, token || '', contentType || '', body || '');
+    });
+  }
+  const headers = {};
+  if (token) headers.Authorization = 'Bearer ' + token;
+  if (contentType) headers['Content-Type'] = contentType;
+  return fetch(url, { method, headers, body: body || undefined })
+    .then(r => r.text().then(text => ({ status: r.status, text })))
+    .catch(e => ({ status: 0, text: String(e) }));
+}
+async function api(method, url, contentType, body) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const tok = await getToken(false) || driveToken.value;
+    if (!tok) throw Object.assign(new Error('login'), { code: 'login' });
+    const r = await http(method, url, tok, contentType, body);
+    if (r.status === 401 && attempt === 0) { driveToken.value = null; continue; }
+    if (r.status === 401) throw Object.assign(new Error('login'), { code: 'login' });
+    return r;
+  }
+}
+const G = 'https://www.googleapis.com';
+async function findFile() {
+  const q = encodeURIComponent(`name='${DRIVE.fileName}' and trashed=false`);
+  const r = await api('GET', `${G}/drive/v3/files?q=${q}&spaces=drive&orderBy=modifiedTime%20desc&fields=files(id)`);
+  if (r.status !== 200) throw new Error('파일 검색 실패 (' + r.status + ')');
+  return JSON.parse(r.text).files?.[0]?.id || null;
+}
+async function downloadFile(id) {
+  const r = await api('GET', `${G}/drive/v3/files/${id}?alt=media`);
+  if (r.status === 404) return 404;
+  if (r.status !== 200) throw new Error('내려받기 실패 (' + r.status + ')');
+  try { return JSON.parse(r.text); } catch (e) { return null; }
+}
+async function uploadFile(id, json) {
+  if (id) {
+    const r = await api('PATCH', `${G}/upload/drive/v3/files/${id}?uploadType=media&fields=id`, 'application/json', json);
+    if (r.status === 200) return id;
+    if (r.status !== 404) throw new Error('올리기 실패 (' + r.status + ')');
+  }
+  const b = 'crm' + uid();
+  const body = `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n`
+    + JSON.stringify({ name: DRIVE.fileName, mimeType: 'application/json' })
+    + `\r\n--${b}\r\nContent-Type: application/json\r\n\r\n${json}\r\n--${b}--`;
+  const r = await api('POST', `${G}/upload/drive/v3/files?uploadType=multipart&fields=id`, `multipart/related; boundary=${b}`, body);
+  if (r.status !== 200) throw new Error('파일 만들기 실패 (' + r.status + ')');
+  return JSON.parse(r.text).id;
+}
+
+/* ---- 합치기 ---- */
+const ver = c => c.updatedAt || c.createdAt || 0;
+function mergeData(A, B) {
+  const del = { ...A.deleted };
+  for (const [k, v] of Object.entries(B.deleted || {})) del[k] = Math.max(del[k] || 0, v);
+  const byId = {};
+  for (const c of A.customers) byId[c.id] = { a: c };
+  for (const c of B.customers || []) (byId[c.id] = byId[c.id] || {}).b = c;
+  const out = [];
+  for (const [id, { a, b }] of Object.entries(byId)) {
+    const win = !a ? b : !b ? a : ver(b) > ver(a) ? b : a;
+    if (del[id] && del[id] >= ver(win)) continue;
+    const notes = {};
+    for (const n of [...(a?.notes || []), ...(b?.notes || [])]) if (!del[n.id]) notes[n.id] = n;
+    out.push({ ...win, notes: Object.values(notes).sort((x, y) => x.ts - y.ts) });
+  }
+  out.sort((x, y) => (x.id < y.id ? -1 : 1));
+  const seen = new Set(), mc = [];
+  for (const c of [...A.calls, ...(B.calls || [])]) {
+    const k = c.d + '_' + norm(c.n);
+    if (!seen.has(k)) { seen.add(k); mc.push(c); }
+  }
+  mc.sort((x, y) => y.d - x.d || (norm(x.n) < norm(y.n) ? -1 : 1));
+  return { customers: out, calls: mc, deleted: del };
+}
+const canon = d => JSON.stringify([d.customers, d.calls, d.deleted]);
+
+/* ---- 동기화 실행 ---- */
+async function driveSync(interactive) {
+  if (syncing) { syncAgain = true; return; }
+  syncing = true; updateSyncUi();
+  let ok = false;
+  try {
+    const tok = await getToken(interactive);
+    if (!tok) throw Object.assign(new Error('login'), { code: 'login' });
+    if (!drive.fileId) drive.fileId = await findFile();
+    let remote = null;
+    if (drive.fileId) {
+      remote = await downloadFile(drive.fileId);
+      if (remote === 404) { drive.fileId = await findFile(); remote = drive.fileId ? await downloadFile(drive.fileId) : null; }
+      if (remote === 404 || remote?.app !== 'callcrm') remote = null;
+    }
+    const local = { customers, calls, deleted };
+    const merged = remote ? mergeData(local, remote) : mergeData(local, { customers: [], calls: [], deleted: {} });
+    if (canon(merged) !== canon(local)) {
+      customers = merged.customers; calls = merged.calls; deleted = merged.deleted;
+      save(K.customers, customers); save(K.calls, calls); save(K.deleted, deleted);
+      rebuildIndex();
+    }
+    if (!remote || canon(merged) !== canon(mergeData({ customers: [], calls: [], deleted: {} }, remote))) {
+      const json = JSON.stringify({ app: 'callcrm', version: 2, updatedAt: Date.now(), ...merged });
+      drive.fileId = await uploadFile(drive.fileId, json);
+    }
+    drive.connected = true; drive.dirty = false; drive.lastSync = Date.now(); drive.error = '';
+    ok = true;
+  } catch (e) {
+    drive.error = e.code === 'login' ? 'login' : (e.message || '동기화 실패');
+    if (interactive) toast(e.code === 'login' ? '구글 로그인이 필요해요' : drive.error);
+  } finally {
+    syncing = false; saveDrive();
+    if (ok && interactive) toast('구글 드라이브와 동기화했어요');
+    safeRender();
+    if (syncAgain) { syncAgain = false; scheduleDriveSync(); }
+  }
+}
+
+function driveDisconnect() {
+  if (!confirm('구글 드라이브 동기화를 끌까요?\n이 기기의 데이터와 드라이브 파일은 그대로 남아요.')) return;
+  if (!isApp && driveToken.value && window.google?.accounts?.oauth2) google.accounts.oauth2.revoke(driveToken.value, () => {});
+  driveToken.value = null;
+  drive = { connected: false, fileId: null, lastSync: 0, dirty: false, error: '' };
+  saveDrive(); render();
+}
+
+/* ---- 설정 화면 ---- */
+function driveStatusText() {
+  if (syncing) return '동기화 중…';
+  if (!drive.connected) return '연결 안 됨';
+  if (drive.error === 'login') return '<span class="stale">로그인이 필요해요</span>';
+  if (drive.error) return `<span class="stale">오류: ${esc(drive.error)}</span>`;
+  return `연결됨 · ${drive.lastSync ? '마지막 동기화 ' + fmtDate(drive.lastSync) : '대기 중'}${drive.dirty ? ' · 올릴 변경사항 있음' : ''}`;
+}
+function driveSettingsHtml() {
+  const noId = !isApp && !DRIVE.webClientId;
+  return `
+    <div class="setting-row">
+      <div><div>구글 드라이브</div><div class="small" id="driveStatus">${driveStatusText()}</div></div>
+      ${drive.connected
+        ? '<button class="btn ghost" id="driveNow">지금 동기화</button>'
+        : `<button class="btn" id="driveNow" ${noId ? 'disabled' : ''}>연결하기</button>`}
+    </div>
+    <p class="small">내 구글 드라이브의 <b>${esc(DRIVE.fileName)}</b> 파일에 저장돼요. 폰과 PC에서 같은 구글 계정으로 연결하면 같은 데이터를 보고 고칠 수 있어요.${isApp ? ' 앱을 열 때와 내용을 바꿀 때 자동으로 동기화돼요.' : ' PC에서는 화면을 열 때마다 ‘지금 동기화’를 한 번 눌러 주세요.'}</p>
+    ${noId ? '<p class="small stale">PC 연결 설정(웹 클라이언트 ID)이 아직 안 되어 있어요.</p>' : ''}
+    ${drive.connected ? '<button class="btn danger" id="driveOff" style="padding:8px 12px;font-size:13px">연결 해제</button>' : ''}
+  `;
+}
+function bindDriveSettings(v) {
+  v.querySelector('#driveNow').onclick = () => driveSync(true);
+  const off = v.querySelector('#driveOff'); if (off) off.onclick = driveDisconnect;
+}
 
 /* =========================================================
  * 브라우저 미리보기용 가짜 통화기록 (?demo)
@@ -723,6 +992,7 @@ function demoBridge() {
 rebuildIndex();
 render();
 syncCalls(true);
+if (drive.connected && isApp) driveSync(false);
 </script>
 </body>
 </html>

@@ -24,8 +24,18 @@ import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import com.google.android.gms.auth.api.identity.AuthorizationRequest;
+import com.google.android.gms.auth.api.identity.AuthorizationResult;
+import com.google.android.gms.auth.api.identity.Identity;
+import com.google.android.gms.common.api.Scope;
+
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 
 /**
  * 화면(UI)은 assets/index.html 이 담당하고, 이 액티비티는
@@ -36,6 +46,8 @@ public class MainActivity extends Activity {
 
     private static final int REQ_PERM = 1;
     private static final int REQ_FILE = 2;
+    private static final int REQ_AUTH = 3;
+    private static final String DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 
     private WebView web;
     private ValueCallback<Uri[]> fileCallback;
@@ -124,6 +136,15 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == REQ_AUTH) {
+            try {
+                AuthorizationResult r = Identity.getAuthorizationClient(this).getAuthorizationResultFromIntent(data);
+                sendToken(r.getAccessToken(), null);
+            } catch (Exception e) {
+                sendToken(null, "cancelled");
+            }
+            return;
+        }
         if (requestCode == REQ_FILE && fileCallback != null) {
             Uri[] result = null;
             if (resultCode == RESULT_OK && data != null && data.getData() != null) {
@@ -141,6 +162,76 @@ public class MainActivity extends Activity {
         web.evaluateJavascript("window.onBack ? window.onBack() : false", value -> {
             if (!"true".equals(value)) MainActivity.super.onBackPressed();
         });
+    }
+
+    private void sendToken(String token, String err) {
+        js("window.__driveToken && window.__driveToken(" + JSONObject.quote(token == null ? "" : token)
+                + "," + JSONObject.quote(err == null ? "" : err) + ")");
+    }
+
+    /** 구글 드라이브(drive.file) 접근 토큰 요청. interactive=false 면 동의 화면을 띄우지 않음 */
+    private void authorizeDrive(boolean interactive) {
+        AuthorizationRequest req = AuthorizationRequest.builder()
+                .setRequestedScopes(Collections.singletonList(new Scope(DRIVE_SCOPE)))
+                .build();
+        Identity.getAuthorizationClient(this).authorize(req)
+                .addOnSuccessListener(r -> {
+                    if (r.hasResolution()) {
+                        if (!interactive) { sendToken(null, "need_consent"); return; }
+                        try {
+                            startIntentSenderForResult(r.getPendingIntent().getIntentSender(), REQ_AUTH, null, 0, 0, 0);
+                        } catch (Exception e) {
+                            sendToken(null, "launch_failed");
+                        }
+                    } else {
+                        sendToken(r.getAccessToken(), null);
+                    }
+                })
+                .addOnFailureListener(e -> sendToken(null, "error: " + e.getMessage()));
+    }
+
+    /** googleapis.com 으로만 HTTP 요청을 대신 보냄 (file:// 페이지의 CORS 제약 회피) */
+    private void httpRequest(String id, String method, String url, String token, String contentType, String body) {
+        new Thread(() -> {
+            int status = 0;
+            String text;
+            try {
+                URL u = new URL(url);
+                if (!"https".equals(u.getProtocol()) || !"www.googleapis.com".equals(u.getHost())) {
+                    throw new SecurityException("blocked host");
+                }
+                HttpURLConnection c = (HttpURLConnection) u.openConnection();
+                c.setConnectTimeout(15000);
+                c.setReadTimeout(30000);
+                if ("PATCH".equals(method)) {
+                    c.setRequestMethod("POST");
+                    c.setRequestProperty("X-HTTP-Method-Override", "PATCH");
+                } else {
+                    c.setRequestMethod(method);
+                }
+                if (token != null && !token.isEmpty()) c.setRequestProperty("Authorization", "Bearer " + token);
+                if (body != null && !body.isEmpty()) {
+                    c.setDoOutput(true);
+                    if (contentType != null && !contentType.isEmpty()) c.setRequestProperty("Content-Type", contentType);
+                    try (OutputStream os = c.getOutputStream()) {
+                        os.write(body.getBytes(StandardCharsets.UTF_8));
+                    }
+                }
+                status = c.getResponseCode();
+                InputStream is = status >= 400 ? c.getErrorStream() : c.getInputStream();
+                ByteArrayOutputStream bo = new ByteArrayOutputStream();
+                if (is != null) {
+                    byte[] buf = new byte[8192];
+                    int n;
+                    while ((n = is.read(buf)) > 0) bo.write(buf, 0, n);
+                    is.close();
+                }
+                text = bo.toString("UTF-8");
+            } catch (Exception e) {
+                text = String.valueOf(e.getMessage());
+            }
+            js("window.__httpDone && window.__httpDone(" + JSONObject.quote(id) + "," + status + "," + JSONObject.quote(text) + ")");
+        }).start();
     }
 
     /** JS에서 window.AndroidBridge 로 호출 */
@@ -206,6 +297,16 @@ public class MainActivity extends Activity {
             } catch (Exception e) {
                 return false;
             }
+        }
+
+        @JavascriptInterface
+        public void driveAuthorize(boolean interactive) {
+            runOnUiThread(() -> authorizeDrive(interactive));
+        }
+
+        @JavascriptInterface
+        public void http(String id, String method, String url, String token, String contentType, String body) {
+            httpRequest(id, method, url, token, contentType, body);
         }
 
         @JavascriptInterface

@@ -40,3 +40,8 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 }
+
+dependencies {
+    // 구글 계정 로그인 + 드라이브 권한 (WebView 안에서는 구글 로그인이 막혀 있어 네이티브로 처리)
+    implementation 'com.google.android.gms:play-services-auth:21.2.0'
+}
